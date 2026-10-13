@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "emacs-jail"
+version = "1.0.0"
+description = "Firejail framework for isolated Emacs and Org-Mode execution using single-file zip environments for non-system UIDs"
+readme = "README.md"
+authors = [{name = "Emacs-Web Team"}]
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.0.0",
+]
+
+[project.scripts]
+emacs-jail = "emacs_jail.cli:main"
+emacs-jail-mcp = "emacs_jail.mcp_server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["emacs_jail*"]
+
+[tool.setuptools.package-data]
+emacs_jail = ["../firejail/*.profile", "../lisp/*.el"]
