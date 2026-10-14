@@ -443,6 +443,9 @@ class UserArchiveManager:
         archive_path = self.get_archive_path(clean_uid)
         clean_rel = relative_path.lstrip("/\\")
 
+        if "\0" in clean_rel or any(p in ("..", ".") for p in clean_rel.replace("\\", "/").split("/")):
+            raise ZipSlipSecurityError(f"Path traversal detected in relative path: '{relative_path}'")
+
         if not archive_path.is_file():
             raise FileNotFoundInEnvironmentError(f"User archive {clean_uid} does not exist.")
 
@@ -458,6 +461,10 @@ class UserArchiveManager:
         """Add or update a file directly in user archive atomically."""
         clean_uid = validate_uid(uid)
         clean_rel = relative_path.lstrip("/\\")
+
+        if "\0" in clean_rel or any(p in ("..", ".") for p in clean_rel.replace("\\", "/").split("/")):
+            raise ZipSlipSecurityError(f"Path traversal detected in relative path: '{relative_path}'")
+
         archive_path = self.get_archive_path(clean_uid)
 
         if not archive_path.is_file():
@@ -488,6 +495,10 @@ class UserArchiveManager:
         """Delete a file from user archive atomically."""
         clean_uid = validate_uid(uid)
         clean_rel = relative_path.lstrip("/\\")
+
+        if "\0" in clean_rel or any(p in ("..", ".") for p in clean_rel.replace("\\", "/").split("/")):
+            raise ZipSlipSecurityError(f"Path traversal detected in relative path: '{relative_path}'")
+
         archive_path = self.get_archive_path(clean_uid)
 
         if not archive_path.is_file():

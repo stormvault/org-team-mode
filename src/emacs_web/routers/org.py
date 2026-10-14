@@ -3,7 +3,7 @@
 from typing import Annotated, Any
 
 from emacs_jail.emacs import EmacsOrgManager
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from emacs_web.auth.models import AuthenticatedTenant
@@ -40,18 +40,40 @@ class OrgEvalRequest(BaseModel):
     expression: str
 
 
+VALID_EXPORT_FORMATS = {
+    "html",
+    "md",
+    "markdown",
+    "txt",
+    "ascii",
+    "latex",
+    "tex",
+    "org",
+}
+
+
 def clean_org_path(path: str | None) -> str | None:
-    """Normalize file path by removing redundant workspace/ prefix.
+    """Normalize file path by removing redundant workspace/ prefix and checking traversal.
 
     Args:
         path: File path relative to workspace or environment.
 
     Returns:
         str | None: Cleaned path relative to workspace directory.
+
+    Raises:
+        HTTPException: 400 Bad Request if path traversal is detected.
     """
     if path is None:
         return None
     clean = path.strip().lstrip("/\\")
+    if "\0" in clean or any(
+        p in ("..", ".") for p in clean.replace("\\", "/").split("/")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Path traversal indicator detected in org path: {path}",
+        )
     if clean.startswith("workspace/"):
         return clean[len("workspace/") :]
     return clean
@@ -72,13 +94,26 @@ def export_org_document(
 
     Returns:
         dict[str, Any]: Export result with output filename, time, and content.
+
+    Raises:
+        HTTPException: 400 if export_format is unsupported or path is invalid.
     """
+    fmt = req.export_format.lower().strip()
+    if fmt not in VALID_EXPORT_FORMATS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Unsupported export format '{req.export_format}'. "
+                f"Supported: {sorted(VALID_EXPORT_FORMATS)}"
+            ),
+        )
+
     cleaned_input = clean_org_path(req.org_file) or req.org_file
     cleaned_output = clean_org_path(req.output_file)
     res = org_mgr.export(
         uid=tenant.uid,
         org_file=cleaned_input,
-        export_format=req.export_format,
+        export_format=fmt,
         output_file=cleaned_output,
         return_content=True,
     )

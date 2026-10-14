@@ -80,6 +80,27 @@ async def test_files_crud_operations(client: AsyncClient) -> None:
     files = res_list.json()["files"]
     assert any(f["filename"] == "workspace/notes.org" for f in files)
 
+    # Trailing slash test
+    res_list_slash = await client.get("/api/v1/files/")
+    assert res_list_slash.status_code == 200
+    assert len(res_list_slash.json()["files"]) == len(files)
+
+    # Path traversal rejection tests
+    res_put_traversal = await client.put(
+        "/api/v1/files/workspace%2F..%2F..%2Fevil.org",
+        json={"content": "malicious"},
+    )
+    assert res_put_traversal.status_code == 400
+    assert "Path traversal" in res_put_traversal.json()["detail"]
+
+    res_get_traversal = await client.get("/api/v1/files/workspace%2F..%2Fetc%2Fpasswd")
+    assert res_get_traversal.status_code == 400
+
+    res_del_traversal = await client.delete(
+        "/api/v1/files/workspace%2F..%2F..%2Fevil.org"
+    )
+    assert res_del_traversal.status_code == 400
+
     # Put a new file
     file_path = "workspace/test_doc.org"
     doc_content = "#+TITLE: Custom Doc\n* TODO Test Task\n"
@@ -134,6 +155,21 @@ async def test_org_operations(client: AsyncClient) -> None:
     assert (
         "<html" in data_export["content"] or "<!DOCTYPE html" in data_export["content"]
     )
+
+    # 3b. Org Export with invalid format
+    res_bad_fmt = await client.post(
+        "/api/v1/org/export",
+        json={"org_file": "workspace/notes.org", "export_format": "unsupported_fmt"},
+    )
+    assert res_bad_fmt.status_code == 400
+    assert "Unsupported export format" in res_bad_fmt.json()["detail"]
+
+    # 3c. Org Export with traversal in path
+    res_traversal_export = await client.post(
+        "/api/v1/org/export",
+        json={"org_file": "workspace/../../evil.org"},
+    )
+    assert res_traversal_export.status_code == 400
 
     # 4. Org Babel
     res_babel = await client.post(

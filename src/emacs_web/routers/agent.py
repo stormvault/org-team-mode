@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from functools import lru_cache
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -17,11 +17,14 @@ router = APIRouter()
 
 
 @lru_cache
-def _get_factory_singleton(storage_dir: str, persistence: str) -> TenantAgentFactory:
+def _get_factory_singleton(
+    storage_dir: str, persistence: str, test_auth_override: bool
+) -> TenantAgentFactory:
     """Cache factory instance per storage directory and persistence setting."""
     settings = Settings(
         emacs_jail_storage_dir=storage_dir,
         emacs_agent_persistence=persistence,
+        test_auth_override=test_auth_override,
     )
     return TenantAgentFactory(settings)
 
@@ -40,6 +43,7 @@ def get_agent_factory(
     return _get_factory_singleton(
         str(settings.emacs_jail_storage_dir),
         settings.emacs_agent_persistence,
+        settings.test_auth_override,
     )
 
 
@@ -64,8 +68,17 @@ async def chat_with_agent(
 
     Returns:
         dict[str, Any]: Response status, UID, and agent message.
+
+    Raises:
+        HTTPException: 400 Bad Request if prompt is empty or whitespace only.
     """
-    response = await factory.execute_turn(tenant, req.prompt)
+    clean_prompt = req.prompt.strip()
+    if not clean_prompt:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Prompt must not be empty or whitespace only",
+        )
+    response = await factory.execute_turn(tenant, clean_prompt)
     return {
         "status": "success",
         "uid": tenant.uid,
@@ -88,10 +101,19 @@ async def stream_chat_with_agent(
 
     Returns:
         EventSourceResponse: SSE streaming response.
+
+    Raises:
+        HTTPException: 400 Bad Request if prompt is empty or whitespace only.
     """
+    clean_prompt = prompt.strip()
+    if not clean_prompt:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Prompt must not be empty or whitespace only",
+        )
 
     async def event_generator() -> AsyncGenerator[dict[str, str], None]:
-        async for event in factory.stream_turn(tenant, prompt):
+        async for event in factory.stream_turn(tenant, clean_prompt):
             yield event
 
     return EventSourceResponse(event_generator())

@@ -3,7 +3,6 @@
 import zipfile
 
 import pytest
-
 from emacs_jail.archive import UserArchiveManager, validate_uid
 from emacs_jail.config import JailConfig
 from emacs_jail.exceptions import (
@@ -79,6 +78,16 @@ def test_direct_file_rw_and_deletion(tmp_path):
     mgr.delete_file(uid, "workspace/custom.txt")
     with pytest.raises(FileNotFoundInEnvironmentError):
         mgr.read_file(uid, "workspace/custom.txt")
+
+    # Path traversal rejection tests
+    with pytest.raises(ZipSlipSecurityError):
+        mgr.write_file(uid, "workspace/../../evil.txt", "evil")
+
+    with pytest.raises(ZipSlipSecurityError):
+        mgr.read_file(uid, "workspace/../../etc/passwd")
+
+    with pytest.raises(ZipSlipSecurityError):
+        mgr.delete_file(uid, "workspace/../../evil.txt")
 
 
 def test_repack_preserves_packaged_binaries(tmp_path):

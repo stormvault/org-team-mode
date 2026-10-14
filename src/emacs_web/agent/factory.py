@@ -1,10 +1,14 @@
 """Agent orchestration factory using Google Antigravity SDK."""
 
+import json
 from collections.abc import AsyncGenerator
+from pathlib import Path
+from typing import Any
 
-from emacs_jail.agent_tools import ANTIGRAVITY_TOOLS
+from emacs_jail.agent_tools import ANTIGRAVITY_TOOLS, _default_config
 from google.antigravity import Agent, LocalAgentConfig
 from google.antigravity.hooks import policy
+from google.antigravity.types import Text, Thought, ToolCall, ToolResult
 
 from emacs_web.auth.models import AuthenticatedTenant
 from emacs_web.auth.service import validate_tenant_uid
@@ -22,6 +26,8 @@ class TenantAgentFactory:
         """
         self.settings = settings or get_settings()
         self._resident_agents: dict[str, Agent] = {}
+        # Ensure underlying agent tools use the same storage directory as Settings
+        _default_config.storage_dir = Path(self.settings.emacs_jail_storage_dir)
 
     def create_config(self, tenant: AuthenticatedTenant) -> LocalAgentConfig:
         """Create LocalAgentConfig with deny-by-default policies and isolated storage.
@@ -42,12 +48,30 @@ class TenantAgentFactory:
         app_data_dir.mkdir(parents=True, exist_ok=True)
 
         tenant_uid = clean_uid
+
+        def _tenant_predicate(args: Any) -> bool:
+            if isinstance(args, dict):
+                return args.get("uid") == tenant_uid
+            if hasattr(args, "uid"):
+                return args.uid == tenant_uid
+            return False
+
+        # Build policy list: deny-by-default first, then allow emacs_* wildcard rule
+        # per spec, plus individual allow rules for ANTIGRAVITY_TOOLS so in-process
+        # policy evaluation accurately approves tenant-scoped calls.
         policies = [
             policy.deny_all(),
             policy.allow(
                 "emacs_*",
-                when=lambda args: args.get("uid") == tenant_uid,
+                when=_tenant_predicate,
             ),
+            *[
+                policy.allow(
+                    getattr(t, "__name__", str(t)),
+                    when=_tenant_predicate,
+                )
+                for t in ANTIGRAVITY_TOOLS
+            ],
         ]
 
         return LocalAgentConfig(
@@ -107,7 +131,7 @@ class TenantAgentFactory:
     async def stream_turn(
         self, tenant: AuthenticatedTenant, prompt: str
     ) -> AsyncGenerator[dict[str, str], None]:
-        """Stream an agent turn yielding thoughts, tokens, and done events.
+        """Stream an agent turn yielding thoughts, tokens, tool calls, and done events.
 
         Args:
             tenant: Authenticated tenant context.
@@ -120,19 +144,54 @@ class TenantAgentFactory:
             agent = self.get_agent(tenant)
             async with agent:
                 resp = await agent.chat(prompt)
-                async for thought in resp.thoughts:
-                    yield {"event": "thought", "data": str(thought)}
-                async for token in resp:
-                    yield {"event": "token", "data": str(token)}
-                yield {"event": "done", "data": "[DONE]"}
+                async for event in self._process_stream_response(resp):
+                    yield event
             return
 
         agent = self.get_agent(tenant)
         if not agent.is_started:
             await agent.__aenter__()
         resp = await agent.chat(prompt)
-        async for thought in resp.thoughts:
-            yield {"event": "thought", "data": str(thought)}
-        async for token in resp:
-            yield {"event": "token", "data": str(token)}
+        async for event in self._process_stream_response(resp):
+            yield event
+
+    async def _process_stream_response(
+        self, resp: Any
+    ) -> AsyncGenerator[dict[str, str], None]:
+        """Process ChatResponse into SSE event dictionaries."""
+        if hasattr(resp, "chunks"):
+            async for chunk in resp.chunks:
+                if isinstance(chunk, Thought):
+                    yield {"event": "thought", "data": str(chunk.text)}
+                elif isinstance(chunk, Text):
+                    yield {"event": "token", "data": str(chunk.text)}
+                elif isinstance(chunk, ToolCall):
+                    payload = {"name": str(chunk.name), "args": chunk.args}
+                    if chunk.id:
+                        payload["id"] = chunk.id
+                    yield {"event": "tool_call", "data": json.dumps(payload)}
+                elif isinstance(chunk, ToolResult):
+                    payload = {"name": str(chunk.name), "result": chunk.result}
+                    if chunk.id:
+                        payload["id"] = chunk.id
+                    if chunk.error:
+                        payload["error"] = chunk.error
+                    yield {"event": "tool_result", "data": json.dumps(payload)}
+                elif hasattr(chunk, "text"):
+                    yield {"event": "token", "data": str(chunk.text)}
+        else:
+            if hasattr(resp, "thoughts"):
+                async for thought in resp.thoughts:
+                    yield {"event": "thought", "data": str(thought)}
+            if hasattr(resp, "tool_calls"):
+                async for tc in resp.tool_calls:
+                    tc_payload: dict[str, Any] = {
+                        "name": str(tc.name),
+                        "args": tc.args,
+                    }
+                    if getattr(tc, "id", None):
+                        tc_payload["id"] = tc.id
+                    yield {"event": "tool_call", "data": json.dumps(tc_payload)}
+            async for token in resp:
+                yield {"event": "token", "data": str(token)}
         yield {"event": "done", "data": "[DONE]"}

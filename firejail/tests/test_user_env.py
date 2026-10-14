@@ -2,7 +2,6 @@
 
 
 import pytest
-
 from emacs_jail.config import JailConfig
 from emacs_jail.exceptions import FileNotFoundInEnvironmentError, ZipSlipSecurityError
 from emacs_jail.user_env import UserEnvironment

@@ -54,3 +54,21 @@ def test_emacs_jail_package_import() -> None:
     assert JailConfig is not None
     assert UserEnvironment is not None
     assert len(ANTIGRAVITY_TOOLS) > 0
+
+
+def test_main_cli_entrypoint() -> None:
+    """Verify main CLI entrypoint parses args and calls uvicorn.run."""
+    import sys
+
+    from emacs_web.app import main
+
+    with (
+        mock.patch.object(
+            sys, "argv", ["emacs-web", "--port", "9090", "--host", "127.0.0.1"]
+        ),
+        mock.patch("uvicorn.run") as mock_uvicorn_run,
+    ):
+        main()
+        mock_uvicorn_run.assert_called_once_with(
+            "emacs_web.app:app", host="127.0.0.1", port=9090, reload=False
+        )

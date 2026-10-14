@@ -121,7 +121,31 @@ app.include_router(org_router, prefix="/api/v1/org", tags=["org"])
 
 def main() -> None:
     """CLI entrypoint for emacs-web server."""
-    uvicorn.run("emacs_web.app:app", host="0.0.0.0", port=8000, reload=False)
+    import argparse
+    import os
+
+    parser = argparse.ArgumentParser(
+        description="Emacs-Web: FastAPI Web Gateway with Firebase Auth & Antigravity Agent Orchestration"
+    )
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("HOST", "0.0.0.0"),
+        help="Host address to bind the server on",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.environ.get("PORT", "8000")),
+        help="Port number to bind the server on",
+    )
+    parser.add_argument(
+        "--reload",
+        action="store_true",
+        default=False,
+        help="Enable auto-reload on code change",
+    )
+    args, _ = parser.parse_known_args()
+    uvicorn.run("emacs_web.app:app", host=args.host, port=args.port, reload=args.reload)
 
 
 if __name__ == "__main__":

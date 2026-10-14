@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -271,3 +272,143 @@ async def test_factory_execute_and_stream_longrunning(tmp_path: Path) -> None:
             e["event"] == "token" and e["data"] == "Longrunning " for e in events
         )
         assert any(e["event"] == "done" and e["data"] == "[DONE]" for e in events)
+
+
+@pytest.mark.asyncio
+async def test_tenant_agent_factory_policy_enforcement_hook(
+    test_settings: Settings,
+) -> None:
+    """Verify policy.enforce actively approves tenant-scoped tools and rejects wrong-tenant/unauthorized tools."""
+    from google.antigravity import types
+    from google.antigravity.hooks import policy
+
+    factory = TenantAgentFactory(test_settings)
+    tenant = AuthenticatedTenant(uid="tenant_safe_01")
+    config = factory.create_config(tenant)
+    hook = policy.enforce(config.policies)
+
+    # 1. Allowed tenant tool call
+    tc_valid = types.ToolCall(
+        name="emacs_org_export",
+        args={"uid": "tenant_safe_01", "org_file": "notes.org"},
+    )
+    res_valid = await hook.run(None, tc_valid)
+    assert res_valid.allow is True
+
+    # 2. Denied tool call with different tenant UID
+    tc_wrong_uid = types.ToolCall(
+        name="emacs_org_export",
+        args={"uid": "attacker_tenant", "org_file": "notes.org"},
+    )
+    res_wrong_uid = await hook.run(None, tc_wrong_uid)
+    assert res_wrong_uid.allow is False
+
+    # 3. Denied tool call without UID (e.g. emacs_user_list_environments)
+    tc_no_uid = types.ToolCall(
+        name="emacs_user_list_environments",
+        args={},
+    )
+    res_no_uid = await hook.run(None, tc_no_uid)
+    assert res_no_uid.allow is False
+
+    # 4. Denied unauthorized non-emacs tool (e.g. bash / run_command)
+    tc_danger = types.ToolCall(
+        name="run_command",
+        args={"CommandLine": "cat /etc/passwd"},
+    )
+    res_danger = await hook.run(None, tc_danger)
+    assert res_danger.allow is False
+
+
+@pytest.mark.asyncio
+async def test_agent_chat_empty_prompt_rejected(
+    agent_client: AsyncClient,
+) -> None:
+    """Verify empty and whitespace prompts return 400 Bad Request on chat endpoint."""
+    res_empty = await agent_client.post("/api/v1/agent/chat", json={"prompt": ""})
+    assert res_empty.status_code == 400
+    assert "Prompt must not be empty" in res_empty.json()["detail"]
+
+    res_ws = await agent_client.post("/api/v1/agent/chat", json={"prompt": "   \n\t  "})
+    assert res_ws.status_code == 400
+    assert "Prompt must not be empty" in res_ws.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_agent_stream_empty_prompt_rejected(
+    agent_client: AsyncClient,
+) -> None:
+    """Verify empty and whitespace prompts return 400 Bad Request on stream endpoint."""
+    res_empty = await agent_client.get(
+        "/api/v1/agent/chat/stream", params={"prompt": ""}
+    )
+    assert res_empty.status_code == 400
+    assert "Prompt must not be empty" in res_empty.json()["detail"]
+
+    res_ws = await agent_client.get(
+        "/api/v1/agent/chat/stream", params={"prompt": "   "}
+    )
+    assert res_ws.status_code == 400
+
+
+class ChunkStreamResponse:
+    """Mock ChatResponse with full semantic chunk stream (Thoughts, Text, ToolCall, ToolResult)."""
+
+    def __init__(self, chunks: list[Any]) -> None:
+        self._chunks = chunks
+
+    @property
+    def chunks(self):
+        async def _gen():
+            for c in self._chunks:
+                yield c
+
+        return _gen()
+
+
+@pytest.mark.asyncio
+async def test_factory_stream_chunks_with_tool_calls(
+    test_settings: Settings,
+) -> None:
+    """Verify stream_turn yields tool_call and tool_result events from semantic chunks."""
+    from google.antigravity.types import Text, Thought, ToolCall, ToolResult
+
+    factory = TenantAgentFactory(test_settings)
+    tenant = AuthenticatedTenant(uid="tenant_stream_chunks")
+
+    chunks = [
+        Thought(step_index=0, text="Let me export the document"),
+        ToolCall(
+            id="call_001",
+            name="emacs_org_export",
+            args={"uid": "tenant_stream_chunks", "org_file": "notes.org"},
+        ),
+        ToolResult(
+            id="call_001",
+            name="emacs_org_export",
+            result={"status": "success", "output_filename": "notes.html"},
+        ),
+        Text(step_index=1, text="Export completed successfully."),
+    ]
+    mock_resp = ChunkStreamResponse(chunks)
+    mock_agent = mock.AsyncMock()
+    mock_agent.chat.return_value = mock_resp
+    mock_agent.__aenter__.return_value = mock_agent
+
+    with mock.patch("emacs_web.agent.factory.Agent", return_value=mock_agent):
+        events = []
+        async for event in factory.stream_turn(tenant, "Export notes"):
+            events.append(event)
+
+        assert any(e["event"] == "thought" for e in events)
+        assert any(
+            e["event"] == "tool_call" and "emacs_org_export" in e["data"]
+            for e in events
+        )
+        assert any(
+            e["event"] == "tool_result" and "notes.html" in e["data"] for e in events
+        )
+        assert any(
+            e["event"] == "token" and "Export completed" in e["data"] for e in events
+        )
+        assert events[-1] == {"event": "done", "data": "[DONE]"}

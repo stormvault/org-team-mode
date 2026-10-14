@@ -2,7 +2,6 @@
 
 
 import pytest
-
 from emacs_jail.archive import UserArchiveManager
 from emacs_jail.config import JailConfig
 from emacs_jail.emacs import EmacsOrgManager
