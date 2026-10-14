@@ -22,19 +22,19 @@
   - [x] Verify all authentication tests pass (Green Phase)
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [9463d68]
 
-## Phase 3: REST API Endpoints for Environments & Org-Mode (TDD)
-- [ ] Task: Write failing tests for REST API endpoints (Red Phase)
-  - [ ] Write test cases for environment management (`/api/v1/env/init`, `/api/v1/env/status`)
-  - [ ] Write test cases for workspace file operations (`/api/v1/files`, GET/PUT/DELETE)
-  - [ ] Write test cases for Org-mode actions (`/api/v1/org/export`, `/api/v1/org/babel`, `/api/v1/org/tangle`, `/api/v1/org/agenda`, `/api/v1/org/eval`)
-  - [ ] Verify all route tests fail as expected (Red Phase)
-- [ ] Task: Implement FastAPI routers and application integration (Green Phase)
-  - [ ] Create router `emacs_web.routers.env` wrapping `UserArchiveManager`
-  - [ ] Create router `emacs_web.routers.files` managing workspace files within tenant `.zip`
-  - [ ] Create router `emacs_web.routers.org` wrapping `EmacsOrgManager` operations
-  - [ ] Assemble routers into `emacs_web.app:app` with error handlers and lifespan management
-  - [ ] Verify all REST route tests pass (Green Phase)
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+## Phase 3: REST API Endpoints for Environments & Org-Mode (TDD) [checkpoint: 676a784]
+- [x] Task: Write failing tests for REST API endpoints (Red Phase) [676a784]
+  - [x] Write test cases for environment management (`/api/v1/env/init`, `/api/v1/env/status`)
+  - [x] Write test cases for workspace file operations (`/api/v1/files`, GET/PUT/DELETE)
+  - [x] Write test cases for Org-mode actions (`/api/v1/org/export`, `/api/v1/org/babel`, `/api/v1/org/tangle`, `/api/v1/org/agenda`, `/api/v1/org/eval`)
+  - [x] Verify all route tests fail as expected (Red Phase)
+- [x] Task: Implement FastAPI routers and application integration (Green Phase) [676a784]
+  - [x] Create router `emacs_web.routers.env` wrapping `UserArchiveManager`
+  - [x] Create router `emacs_web.routers.files` managing workspace files within tenant `.zip`
+  - [x] Create router `emacs_web.routers.org` wrapping `EmacsOrgManager` operations
+  - [x] Assemble routers into `emacs_web.app:app` with error handlers and lifespan management
+  - [x] Verify all REST route tests pass (Green Phase)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [676a784]
 
 ## Phase 4: Antigravity Agent Orchestration & Chat Endpoints (TDD)
 - [ ] Task: Write failing tests for agent orchestrator and chat endpoints (Red Phase)
