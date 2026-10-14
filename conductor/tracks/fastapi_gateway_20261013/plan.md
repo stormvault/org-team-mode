@@ -1,13 +1,13 @@
 # Implementation Plan: FastAPI Web Gateway with Firebase Authentication & Antigravity Agent Orchestration
 
 ## Phase 1: Environment & Dependency Integration
-- [ ] Task: Configure project dependencies and package wiring
-  - [ ] Add `firejail` (emacs-jail) as a local editable dependency in `pyproject.toml`
-  - [ ] Configure `emacs_web` dependencies (`fastapi`, `uvicorn`, `pydantic`, `pydantic-settings`, `firebase-admin`, `sse-starlette`)
-  - [ ] Implement `emacs_web.config.Settings` with `EMACS_AGENT_PERSISTENCE` (default `"EPHEMERAL"`), `EMACS_JAIL_STORAGE_DIR`, and `TEST_AUTH_OVERRIDE`
-- [ ] Task: Write tests for package configuration and imports
-  - [ ] Write unit test confirming clean import of `emacs_jail` components from `emacs_web`
-  - [ ] Verify test passes with `pytest`
+- [x] Task: Configure project dependencies and package wiring [e98089d]
+  - [x] Add `firejail` (emacs-jail) as a local editable dependency in `pyproject.toml`
+  - [x] Configure `emacs_web` dependencies (`fastapi`, `uvicorn`, `pydantic`, `pydantic-settings`, `firebase-admin`, `sse-starlette`)
+  - [x] Implement `emacs_web.config.Settings` with `EMACS_AGENT_PERSISTENCE` (default `"EPHEMERAL"`), `EMACS_JAIL_STORAGE_DIR`, and `TEST_AUTH_OVERRIDE`
+- [x] Task: Write tests for package configuration and imports [e98089d]
+  - [x] Write unit test confirming clean import of `emacs_jail` components from `emacs_web`
+  - [x] Verify test passes with `pytest`
 - [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
 
 ## Phase 2: Firebase Authentication & Tenant Context (TDD)
