@@ -8,3 +8,7 @@ dist/
 build/
 *.lock
 .tmp*
+.coverage
+.coverage.*
+htmlcov/
+.venv/
