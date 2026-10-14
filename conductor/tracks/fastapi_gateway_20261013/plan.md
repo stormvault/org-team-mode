@@ -48,11 +48,11 @@
   - [x] Verify agent tests pass (Green Phase)
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [af5dbea]
 
-## Phase 5: End-to-End Integration, Quality & Coverage Verification
-- [ ] Task: Multi-tenant end-to-end integration test
-  - [ ] Write comprehensive multi-tenant test verifying concurrent isolated requests across two distinct virtual UIDs
-  - [ ] Verify zero cross-tenant contamination in archives and runtime environments
-- [ ] Task: Quality assurance and test coverage verification
-  - [ ] Run full test suite with coverage report: target >80% coverage for new `emacs_web` code
-  - [ ] Run code formatting and linting: `ruff check` and `ruff format`
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+## Phase 5: End-to-End Integration, Quality & Coverage Verification [checkpoint: 1e2458b]
+- [x] Task: Multi-tenant end-to-end integration test [1e2458b]
+  - [x] Write comprehensive multi-tenant test verifying concurrent isolated requests across two distinct virtual UIDs
+  - [x] Verify zero cross-tenant contamination in archives and runtime environments
+- [x] Task: Quality assurance and test coverage verification [1e2458b]
+  - [x] Run full test suite with coverage report: target >80% coverage for new `emacs_web` code
+  - [x] Run code formatting and linting: `ruff check` and `ruff format`
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [1e2458b]
