@@ -36,17 +36,17 @@
   - [x] Verify all REST route tests pass (Green Phase)
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [676a784]
 
-## Phase 4: Antigravity Agent Orchestration & Chat Endpoints (TDD)
-- [ ] Task: Write failing tests for agent orchestrator and chat endpoints (Red Phase)
-  - [ ] Write unit tests for `TenantAgentFactory` asserting deny-by-default safety policy configuration and tenant UID validation
-  - [ ] Write unit tests for ephemeral vs long-running persistence modes based on `EMACS_AGENT_PERSISTENCE`
-  - [ ] Write integration test for `POST /api/v1/agent/chat` (JSON) and `GET /api/v1/agent/chat/stream` (SSE)
-  - [ ] Verify agent tests fail as expected (Red Phase)
-- [ ] Task: Implement agent orchestrator and endpoints (Green Phase)
-  - [ ] Implement `TenantAgentFactory` in `emacs_web.agent.factory` configuring `LocalAgentConfig`, isolated `app_data_dir`, and policy rules
-  - [ ] Implement agent chat router `emacs_web.routers.agent` with JSON response handler and SSE streaming generator
-  - [ ] Verify agent tests pass (Green Phase)
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+## Phase 4: Antigravity Agent Orchestration & Chat Endpoints (TDD) [checkpoint: af5dbea]
+- [x] Task: Write failing tests for agent orchestrator and chat endpoints (Red Phase) [af5dbea]
+  - [x] Write unit tests for `TenantAgentFactory` asserting deny-by-default safety policy configuration and tenant UID validation
+  - [x] Write unit tests for ephemeral vs long-running persistence modes based on `EMACS_AGENT_PERSISTENCE`
+  - [x] Write integration test for `POST /api/v1/agent/chat` (JSON) and `GET /api/v1/agent/chat/stream` (SSE)
+  - [x] Verify agent tests fail as expected (Red Phase)
+- [x] Task: Implement agent orchestrator and endpoints (Green Phase) [af5dbea]
+  - [x] Implement `TenantAgentFactory` in `emacs_web.agent.factory` configuring `LocalAgentConfig`, isolated `app_data_dir`, and policy rules
+  - [x] Implement agent chat router `emacs_web.routers.agent` with JSON response handler and SSE streaming generator
+  - [x] Verify agent tests pass (Green Phase)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [af5dbea]
 
 ## Phase 5: End-to-End Integration, Quality & Coverage Verification
 - [ ] Task: Multi-tenant end-to-end integration test
