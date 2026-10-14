@@ -10,17 +10,17 @@
   - [x] Verify test passes with `pytest`
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [e98089d]
 
-## Phase 2: Firebase Authentication & Tenant Context (TDD)
-- [ ] Task: Write failing tests for authentication and UID validation (Red Phase)
-  - [ ] Write unit tests for `validate_tenant_uid` testing valid UUIDs/alphanumerics and asserting rejection of path traversal (`..`, `/`, `\0`)
-  - [ ] Write unit tests for `get_current_tenant` verifying Firebase token verification, expired/revoked error handling, and `TEST_AUTH_OVERRIDE` mock bypass
-  - [ ] Verify all tests fail as expected (Red Phase)
-- [ ] Task: Implement authentication models and dependency (Green Phase)
-  - [ ] Implement `AuthenticatedTenant` dataclass in `emacs_web.auth.models`
-  - [ ] Implement `validate_tenant_uid` sanitizer and `get_current_tenant` FastAPI security dependency in `emacs_web.auth.service`
-  - [ ] Implement optional Firebase Admin SDK initializer supporting emulator and credentials
-  - [ ] Verify all authentication tests pass (Green Phase)
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+## Phase 2: Firebase Authentication & Tenant Context (TDD) [checkpoint: 9463d68]
+- [x] Task: Write failing tests for authentication and UID validation (Red Phase) [9463d68]
+  - [x] Write unit tests for `validate_tenant_uid` testing valid UUIDs/alphanumerics and asserting rejection of path traversal (`..`, `/`, `\0`)
+  - [x] Write unit tests for `get_current_tenant` verifying Firebase token verification, expired/revoked error handling, and `TEST_AUTH_OVERRIDE` mock bypass
+  - [x] Verify all tests fail as expected (Red Phase)
+- [x] Task: Implement authentication models and dependency (Green Phase) [9463d68]
+  - [x] Implement `AuthenticatedTenant` dataclass in `emacs_web.auth.models`
+  - [x] Implement `validate_tenant_uid` sanitizer and `get_current_tenant` FastAPI security dependency in `emacs_web.auth.service`
+  - [x] Implement optional Firebase Admin SDK initializer supporting emulator and credentials
+  - [x] Verify all authentication tests pass (Green Phase)
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [9463d68]
 
 ## Phase 3: REST API Endpoints for Environments & Org-Mode (TDD)
 - [ ] Task: Write failing tests for REST API endpoints (Red Phase)
