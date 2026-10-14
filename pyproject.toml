@@ -1,25 +1,43 @@
-[build-system]
-requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "emacs-jail"
-version = "1.0.0"
-description = "Firejail framework for isolated Emacs and Org-Mode execution using single-file zip environments for non-system UIDs"
+name = "emacs-web"
+version = "0.1.0"
+description = "Add your description here"
 readme = "README.md"
-authors = [{name = "Emacs-Web Team"}]
-requires-python = ">=3.10"
+authors = [
+    { name = "Nicolas Couture", email = "nicolas@stormvault.net" }
+]
+requires-python = ">=3.12.13"
 dependencies = [
-    "mcp>=1.0.0",
+    "emacs-jail",
+    "fastapi>=0.143.0",
+    "firebase-admin>=7.7.0",
+    "google-antigravity>=0.1.22",
+    "pydantic>=2.14.1",
+    "pydantic-settings>=2.15.0",
+    "sse-starlette>=3.5.0",
+    "uvicorn>=0.54.0",
 ]
 
 [project.scripts]
-emacs-jail = "emacs_jail.cli:main"
-emacs-jail-mcp = "emacs_jail.mcp_server:main"
+emacs-web = "emacs_web:main"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["emacs_jail*"]
+[build-system]
+requires = ["uv_build>=0.12.21,<0.13.0"]
+build-backend = "uv_build"
 
-[tool.setuptools.package-data]
-emacs_jail = ["../firejail/*.profile", "../lisp/*.el"]
+[tool.uv.sources]
+emacs-jail = { path = "firejail", editable = true }
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.17.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"

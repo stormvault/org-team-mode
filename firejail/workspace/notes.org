@@ -1,0 +1,16 @@
+#+TITLE: Workspace Notes
+#+AUTHOR: User self
+#+DATE: 2026-10-13T23:36:58.913524+00:00
+
+* Welcome to Emacs-Jail
+Your environment is sandboxed using Firejail and persisted in a single-file zip archive.
+
+** Tasks
+*** TODO Review isolated org-mode capabilities
+SCHEDULED: <2026-10-13 Tue>
+*** TODO Test Org-Babel execution
+
+** Python Babel Block Example
+#+begin_src python :results output
+print('Hello from sandboxed Python inside Emacs Org-mode!')
+#+end_src
