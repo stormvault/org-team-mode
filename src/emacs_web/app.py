@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 
 from emacs_web.auth.service import init_firebase
 from emacs_web.config import get_settings
+from emacs_web.routers.agent import router as agent_router
 from emacs_web.routers.env import router as env_router
 from emacs_web.routers.files import router as files_router
 from emacs_web.routers.org import router as org_router
@@ -112,6 +113,7 @@ def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
+app.include_router(agent_router, prefix="/api/v1/agent", tags=["agent"])
 app.include_router(env_router, prefix="/api/v1/env", tags=["environment"])
 app.include_router(files_router, prefix="/api/v1/files", tags=["files"])
 app.include_router(org_router, prefix="/api/v1/org", tags=["org"])
