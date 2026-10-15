@@ -1,0 +1,21 @@
+{
+  "apphosting": {
+    "backendId": "emacs-web-pivot",
+    "rootDir": "pivot",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log"
+    ]
+  },
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "HabitFlow Org"
+      },
+      "phone": true
+    }
+  }
+}
