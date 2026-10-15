@@ -23,11 +23,11 @@
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [132c647]
 
 ## Phase 4: Firebase Authentication, Mandatory Phone MFA Linking & Multi-User Collaboration
-- [ ] Task: Implement Firebase Authentication service (Google Sign-In, Email/Password, phone MFA state tracking)
-- [ ] Task: Implement mandatory Phone MFA Guard and Phone Linking registration flow (`/link-phone`) with account linking
-- [ ] Task: Implement Multi-User Project Collaboration service (segregated personal vs shared org files, invite by email, add collaborator by name)
-- [ ] Task: Configure Firebase App Hosting (`apphosting.yaml`, `firebase.json`) for production deployment
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Implement Firebase Authentication service (Google Sign-In, Email/Password, phone MFA state tracking) [fad53e1]
+- [x] Task: Implement mandatory Phone MFA Guard and Phone Linking registration flow (`/link-phone`) with account linking [fad53e1]
+- [x] Task: Implement Multi-User Project Collaboration service (segregated personal vs shared org files, invite by email, add collaborator by name) [fad53e1]
+- [x] Task: Configure Firebase App Hosting (`apphosting.yaml`, `firebase.json`) for production deployment [fad53e1]
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [fad53e1]
 
 ## Phase 5: Verification, Quality Assurance & Build
 - [ ] Task: Write comprehensive unit test suites for Org engine, clocking, habit streaks, shortcuts, and MFA guards
