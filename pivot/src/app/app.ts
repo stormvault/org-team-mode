@@ -8,6 +8,7 @@ import { KeyboardShortcutsService } from './services/keyboard-shortcuts.service'
 import { StorageService } from './services/storage.service';
 import { FirebaseAuthService } from './services/firebase-auth.service';
 import { ProjectCollaborationService } from './services/project-collaboration.service';
+import { SelfDocumentationService } from './services/self-documentation.service';
 import { NorangTodoState, OrgTask } from './models/org.model';
 import { Habit } from './models/habit.model';
 import { Subscription } from 'rxjs';
@@ -37,6 +38,7 @@ export class App implements OnInit, OnDestroy {
   public readonly refileModalOpen = signal<boolean>(false);
   public readonly exportModalOpen = signal<boolean>(false);
   public readonly targetTaskId = signal<string | null>(null);
+  public readonly selectedAgendaTaskId = signal<string | null>(null);
 
   // Capture Form State
   public captureTemplateKey = 't';
@@ -145,6 +147,49 @@ export class App implements OnInit, OnDestroy {
     return this.orgEngine.filterByTag(tag);
   });
 
+  public readonly filteredNextActions = computed(() => {
+    const tag = this.agendaTagFilter().trim().toLowerCase();
+    const tasks = this.orgEngine.nextActions();
+    if (!tag) return tasks;
+    return tasks.filter(t => t.tags.some(tagItem => tagItem.toLowerCase().includes(tag)));
+  });
+
+  public readonly filteredWaitingTasks = computed(() => {
+    const tag = this.agendaTagFilter().trim().toLowerCase();
+    const tasks = this.orgEngine.waitingTasks();
+    if (!tag) return tasks;
+    return tasks.filter(t => t.tags.some(tagItem => tagItem.toLowerCase().includes(tag)));
+  });
+
+  public readonly filteredHoldTasks = computed(() => {
+    const tag = this.agendaTagFilter().trim().toLowerCase();
+    const tasks = this.orgEngine.holdTasks();
+    if (!tag) return tasks;
+    return tasks.filter(t => t.tags.some(tagItem => tagItem.toLowerCase().includes(tag)));
+  });
+
+  public readonly filteredDoneTasks = computed(() => {
+    const tag = this.agendaTagFilter().trim().toLowerCase();
+    const tasks = this.orgEngine.doneTasks();
+    if (!tag) return tasks;
+    return tasks.filter(t => t.tags.some(tagItem => tagItem.toLowerCase().includes(tag)));
+  });
+
+  public readonly filteredInboxTasks = computed(() => {
+    const tag = this.agendaTagFilter().trim().toLowerCase();
+    const tasks = this.orgEngine.inboxTasks();
+    if (!tag) return tasks;
+    return tasks.filter(t => t.tags.some(tagItem => tagItem.toLowerCase().includes(tag)));
+  });
+
+  public readonly visibleAgendaTasks = computed(() => [
+    ...this.filteredNextActions(),
+    ...this.filteredWaitingTasks(),
+    ...this.filteredHoldTasks(),
+    ...this.filteredDoneTasks(),
+    ...this.filteredInboxTasks()
+  ]);
+
   constructor(
     public orgEngine: OrgEngineService,
     public habitService: HabitService,
@@ -152,7 +197,8 @@ export class App implements OnInit, OnDestroy {
     public shortcutsService: KeyboardShortcutsService,
     public storageService: StorageService,
     public authService: FirebaseAuthService,
-    public collabService: ProjectCollaborationService
+    public collabService: ProjectCollaborationService,
+    public selfDoc: SelfDocumentationService
   ) {}
 
   ngOnInit(): void {
@@ -160,6 +206,11 @@ export class App implements OnInit, OnDestroy {
     this.initShortcuts();
     this.loadSelectedOrgFile();
     this.startIntervalTicker();
+
+    const firstTask = this.orgEngine.getAllTasks()[0];
+    if (firstTask) {
+      this.selectedAgendaTaskId.set(firstTask.id);
+    }
 
     // Enforce initial MFA check: redirect if user is authenticated but MFA incomplete
     if (this.authService.phoneMfaRequired()) {
@@ -219,6 +270,11 @@ export class App implements OnInit, OnDestroy {
         this.showToast(`Selected template: [${tplKey}]`);
         return;
       }
+      if (action.startsWith('refile_to:')) {
+        const target = action.replace('refile_to:', '');
+        this.confirmRefile(target);
+        return;
+      }
 
       switch (action) {
         case 'capture':
@@ -242,11 +298,66 @@ export class App implements OnInit, OnDestroy {
         case 'refile':
           this.openRefileModal();
           break;
+        case 'org':
+          this.selectTab('org');
+          break;
+        case 'agenda:next_task':
+          if (this.activeTab() === 'agenda') this.selectAgendaNextTask();
+          break;
+        case 'agenda:prev_task':
+          if (this.activeTab() === 'agenda') this.selectAgendaPrevTask();
+          break;
+        case 'agenda:focus_filter':
+          this.focusAgendaFilter();
+          break;
         case 'export':
           this.exportModalOpen.set(true);
           break;
         case 'projects':
           this.selectTab('collab');
+          break;
+        case 'manual':
+          this.toggleManual();
+          break;
+        case 'cheat_sheet':
+          this.toggleManual('shortcuts');
+          break;
+        case 'manual:next':
+          this.selfDoc.navigateNext();
+          break;
+        case 'manual:prev':
+          this.selfDoc.navigatePrev();
+          break;
+        case 'manual:tab:next':
+          this.selfDoc.cycleTab(1);
+          if (this.selfDoc.activeTab() === 'describe') this.focusKeyInspector();
+          break;
+        case 'manual:tab:prev':
+          this.selfDoc.cycleTab(-1);
+          if (this.selfDoc.activeTab() === 'describe') this.focusKeyInspector();
+          break;
+        case 'manual:tab:1':
+          this.selfDoc.selectTab('shortcuts');
+          break;
+        case 'manual:tab:2':
+          this.selfDoc.selectTab('workflows');
+          break;
+        case 'manual:tab:3':
+        case 'manual:describe':
+          this.selfDoc.selectTab('describe');
+          this.focusKeyInspector();
+          break;
+        case 'manual:tab:4':
+          this.selfDoc.selectTab('voice');
+          break;
+        case 'manual:voice':
+          this.triggerVoiceAssistant();
+          break;
+        case 'manual:search':
+          this.focusManualSearch();
+          break;
+        case 'manual:enter':
+          this.runSelectedManualShortcut();
           break;
         case 'escape':
           this.closeAllModals();
@@ -349,13 +460,23 @@ export class App implements OnInit, OnDestroy {
   public openTodoStateModal(taskId?: string): void {
     if (taskId) {
       this.targetTaskId.set(taskId);
+      this.selectedAgendaTaskId.set(taskId);
     } else {
-      const active = this.orgEngine.getActiveClock();
-      if (active) {
-        this.targetTaskId.set(active.taskId);
+      const selected = this.selectedAgendaTaskId();
+      if (selected) {
+        this.targetTaskId.set(selected);
       } else {
-        const first = this.orgEngine.getAllTasks()[0];
-        if (first) this.targetTaskId.set(first.id);
+        const active = this.orgEngine.getActiveClock();
+        if (active) {
+          this.targetTaskId.set(active.taskId);
+          this.selectedAgendaTaskId.set(active.taskId);
+        } else {
+          const target = this.orgEngine.getAllTasks()[0]?.id;
+          if (target) {
+            this.targetTaskId.set(target);
+            this.selectedAgendaTaskId.set(target);
+          }
+        }
       }
     }
     this.shortcutsService.setActiveModal('todo_state');
@@ -376,10 +497,17 @@ export class App implements OnInit, OnDestroy {
   public openRefileModal(taskId?: string): void {
     if (taskId) {
       this.targetTaskId.set(taskId);
+      this.selectedAgendaTaskId.set(taskId);
     } else {
-      const firstRefile = this.orgEngine.getAllTasks().find(t => t.file === 'refile.org');
-      if (firstRefile) {
-        this.targetTaskId.set(firstRefile.id);
+      const target = this.selectedAgendaTaskId();
+      if (target) {
+        this.targetTaskId.set(target);
+      } else {
+        const firstRefile = this.orgEngine.getAllTasks().find(t => t.file === 'refile.org');
+        if (firstRefile) {
+          this.targetTaskId.set(firstRefile.id);
+          this.selectedAgendaTaskId.set(firstRefile.id);
+        }
       }
     }
     this.shortcutsService.setActiveModal('refile');
@@ -397,8 +525,9 @@ export class App implements OnInit, OnDestroy {
   }
 
   public quickClockIn(taskId?: string): void {
-    const target = taskId || this.orgEngine.getAllTasks()[0]?.id;
+    const target = taskId || this.selectedAgendaTaskId() || this.orgEngine.getAllTasks()[0]?.id;
     if (target) {
+      this.selectedAgendaTaskId.set(target);
       this.orgEngine.clockIn(target);
       const task = this.orgEngine.getTask(target);
       this.showToast(`Clocked IN: ${task?.title}`);
@@ -416,6 +545,41 @@ export class App implements OnInit, OnDestroy {
     }
   }
 
+  // Agenda Keyboard Cursor Navigation
+  public selectAgendaNextTask(): void {
+    const tasks = this.visibleAgendaTasks();
+    if (tasks.length === 0) return;
+    const currentId = this.selectedAgendaTaskId();
+    const currentIdx = tasks.findIndex(t => t.id === currentId);
+    const nextIdx = currentIdx === -1 ? 0 : (currentIdx + 1) % tasks.length;
+    this.selectedAgendaTaskId.set(tasks[nextIdx].id);
+    this.showToast(`Selected task: ${tasks[nextIdx].title}`);
+  }
+
+  public selectAgendaPrevTask(): void {
+    const tasks = this.visibleAgendaTasks();
+    if (tasks.length === 0) return;
+    const currentId = this.selectedAgendaTaskId();
+    const currentIdx = tasks.findIndex(t => t.id === currentId);
+    const prevIdx = currentIdx === -1 ? 0 : (currentIdx - 1 + tasks.length) % tasks.length;
+    this.selectedAgendaTaskId.set(tasks[prevIdx].id);
+    this.showToast(`Selected task: ${tasks[prevIdx].title}`);
+  }
+
+  public focusAgendaFilter(): void {
+    if (this.activeTab() !== 'agenda') {
+      this.selectTab('agenda');
+    }
+    setTimeout(() => {
+      if (typeof document !== 'undefined') {
+        const el = document.getElementById('agenda-tag-filter-input') as HTMLInputElement;
+        if (el) el.focus();
+      }
+    }, 50);
+  }
+
+  public textVoiceInput = '';
+
   public closeAllModals(): void {
     this.shortcutsService.setActiveModal('none');
     this.captureModalOpen.set(false);
@@ -423,6 +587,165 @@ export class App implements OnInit, OnDestroy {
     this.refileModalOpen.set(false);
     this.exportModalOpen.set(false);
     this.shortcutsService.cheatSheetVisible.set(false);
+    this.selfDoc.closeManual();
+  }
+
+  // Interactive Emacs Self-Documentation Manual Controls
+  public toggleManual(tab?: 'shortcuts' | 'workflows' | 'describe' | 'voice'): void {
+    if (this.selfDoc.manualVisible()) {
+      this.closeManual();
+    } else {
+      this.openManual(tab);
+    }
+  }
+
+  public openManual(tab: 'shortcuts' | 'workflows' | 'describe' | 'voice' = 'shortcuts'): void {
+    this.closeAllModals();
+    this.shortcutsService.setActiveModal('manual');
+    this.shortcutsService.cheatSheetVisible.set(true);
+    this.selfDoc.openManual(tab);
+    if (tab === 'describe') {
+      this.focusKeyInspector();
+    }
+  }
+
+  public closeManual(): void {
+    this.shortcutsService.setActiveModal('none');
+    this.shortcutsService.cheatSheetVisible.set(false);
+    this.selfDoc.closeManual();
+  }
+
+  public triggerVoiceAssistant(): void {
+    this.closeAllModals();
+    this.shortcutsService.setActiveModal('manual');
+    this.selfDoc.toggleVoiceRecognition();
+  }
+
+  public runShortcutAction(action: string): void {
+    this.closeManual();
+    switch (action) {
+      case 'capture':
+        this.openCaptureModal();
+        break;
+      case 'agenda':
+        this.selectTab('agenda');
+        break;
+      case 'clock_in':
+        this.quickClockIn();
+        this.showToast('Clocked in from manual!');
+        break;
+      case 'clock_out':
+        this.quickClockOut();
+        break;
+      case 'todo_state':
+        this.openTodoStateModal();
+        break;
+      case 'refile':
+        this.openRefileModal();
+        break;
+      case 'org':
+        this.selectTab('org');
+        break;
+      case 'filter_agenda':
+        this.focusAgendaFilter();
+        break;
+      case 'export':
+        this.exportModalOpen.set(true);
+        break;
+      case 'toggle_view':
+        this.toggleHabitView();
+        break;
+      case 'projects':
+        this.selectTab('collab');
+        break;
+      case 'fast_state':
+        this.openTodoStateModal();
+        break;
+      default:
+        this.showToast(`Action ${action} triggered from manual`);
+        break;
+    }
+  }
+
+  public runWorkflowAction(wfId: string): void {
+    this.closeManual();
+    switch (wfId) {
+      case 'wf-inbox-capture':
+        this.openCaptureModal();
+        break;
+      case 'wf-refile-pipeline':
+        this.openRefileModal();
+        break;
+      case 'wf-state-machine':
+        this.openTodoStateModal();
+        break;
+      case 'wf-clocking-effort':
+        this.quickClockIn();
+        break;
+      case 'wf-stuck-projects':
+        this.selectTab('agenda');
+        break;
+      case 'wf-habits-intervals':
+        this.toggleHabitView();
+        break;
+      case 'wf-org-babel':
+        this.selectTab('org');
+        break;
+      case 'wf-firebase-mfa':
+        this.selectTab('collab');
+        break;
+      default:
+        this.selectTab('agenda');
+        break;
+    }
+  }
+
+  public runSelectedManualShortcut(): void {
+    if (this.selfDoc.activeTab() === 'shortcuts') {
+      const shortcuts = this.selfDoc.filteredShortcuts();
+      const idx = this.selfDoc.selectedIndex();
+      if (shortcuts[idx]) {
+        this.runShortcutAction(shortcuts[idx].action);
+      }
+    } else if (this.selfDoc.activeTab() === 'workflows') {
+      const workflows = this.selfDoc.filteredWorkflows();
+      const idx = this.selfDoc.selectedIndex();
+      if (workflows[idx]) {
+        this.runWorkflowAction(workflows[idx].id);
+      }
+    }
+  }
+
+  public focusManualSearch(): void {
+    if (typeof document !== 'undefined') {
+      const el = document.getElementById('manual-search-input') as HTMLInputElement;
+      if (el) el.focus();
+    }
+  }
+
+  public focusKeyInspector(): void {
+    setTimeout(() => {
+      if (typeof document !== 'undefined') {
+        const el = document.getElementById('key-inspector-input') as HTMLInputElement;
+        if (el) el.focus();
+      }
+    }, 50);
+  }
+
+  public onManualKeyInspector(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      this.closeManual();
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    this.selfDoc.inspectKeyChord(event);
+  }
+
+  public submitManualVoiceText(query: string): void {
+    if (!query.trim()) return;
+    this.selfDoc.processVoiceQuery(query);
+    this.textVoiceInput = '';
   }
 
   // Org Plain Text & Babel

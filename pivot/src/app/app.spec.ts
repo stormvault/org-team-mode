@@ -196,4 +196,193 @@ describe('App Component (HabitFlow Org & Norang GTD Dashboard)', () => {
     expect(files.personal).toContain('habits.org');
     expect(files.projects.some(f => f.includes('projects/'))).toBe(true);
   });
+
+  it('should toggle interactive Emacs manual on question mark button click and keybinding', async () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const manualBtn = compiled.querySelector('#btn-interactive-manual') as HTMLButtonElement;
+    expect(manualBtn).toBeTruthy();
+
+    expect(app.selfDoc.manualVisible()).toBe(false);
+
+    // Clicking the prominent ? button opens the interactive manual
+    manualBtn.click();
+    fixture.detectChanges();
+    expect(app.selfDoc.manualVisible()).toBe(true);
+    expect(compiled.textContent).toContain('*Norang Manual & Self-Documentation*');
+
+    // Closing manual
+    app.closeManual();
+    fixture.detectChanges();
+    expect(app.selfDoc.manualVisible()).toBe(false);
+
+    // Triggering via keyboard shortcut action
+    app.shortcutsService['actionSubject'].next('manual');
+    expect(app.selfDoc.manualVisible()).toBe(true);
+  });
+
+  it('should trigger voice assistant on microphone button click and answer shortcut queries', async () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const voiceBtn = compiled.querySelector('#btn-voice-assistant') as HTMLButtonElement;
+    expect(voiceBtn).toBeTruthy();
+
+    // Clicking prominent microphone button triggers voice assistant
+    voiceBtn.click();
+    fixture.detectChanges();
+    expect(app.selfDoc.manualVisible()).toBe(true);
+    expect(app.selfDoc.activeTab()).toBe('voice');
+
+    // Process a voice query: "which keyboard shortcut should be used to clock in"
+    app.submitManualVoiceText('which keyboard shortcut should be used to clock in');
+    fixture.detectChanges();
+
+    expect(app.selfDoc.voiceResponse()).toBeTruthy();
+    expect(app.selfDoc.voiceResponse()?.answer).toContain('Alt + Shift + I');
+    expect(compiled.textContent).toContain('Alt + Shift + I');
+    expect(compiled.textContent).toContain('Clock In to Selected Task / Habit');
+  });
+
+  it('should inspect key events in describe-key inspector tab', async () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+
+    app.openManual('describe');
+    expect(app.selfDoc.activeTab()).toBe('describe');
+
+    const keyEvent = new KeyboardEvent('keydown', {
+      key: 'C',
+      altKey: true,
+      shiftKey: true
+    });
+    app.onManualKeyInspector(keyEvent);
+
+    expect(app.selfDoc.lastInspectedKey()).toBe('Alt + Shift + C');
+    expect(app.selfDoc.inspectedShortcut()?.action).toBe('capture');
+  });
+
+  it('should execute shortcut action directly from manual overlay', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+
+    app.openManual('shortcuts');
+    expect(app.selfDoc.manualVisible()).toBe(true);
+
+    // Run capture action from manual
+    app.runShortcutAction('capture');
+    expect(app.selfDoc.manualVisible()).toBe(false);
+    expect(app.captureModalOpen()).toBe(true);
+  });
+
+  it('should display high-density blocks in Norang Agenda: next, stuck, waiting, hold, completed history, and inbox', async () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+
+    app.selectTab('agenda');
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    // Check all high-density GTD blocks are present
+    expect(compiled.textContent).toContain('Norang NEXT Actions List');
+    expect(compiled.textContent).toContain('Stuck Projects');
+    expect(compiled.textContent).toContain('Waiting & Delegated Tasks');
+    expect(compiled.textContent).toContain('On Hold & Blocked Tasks');
+    expect(compiled.textContent).toContain('Historically Actionable Tasks');
+    expect(compiled.textContent).toContain('Refile Inbox');
+
+    // Verify hold and done tasks are populated
+    expect(app.orgEngine.holdTasks().length).toBeGreaterThan(0);
+    expect(app.orgEngine.doneTasks().length).toBeGreaterThan(0);
+    expect(app.orgEngine.inboxTasks().length).toBeGreaterThan(0);
+  });
+
+  it('should filter agenda blocks when agendaTagFilter is applied', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+
+    // Filter by 'security'
+    app.agendaTagFilter.set('security');
+    const filteredTasks = app.visibleAgendaTasks();
+    expect(filteredTasks.length).toBeGreaterThan(0);
+    expect(filteredTasks.every(t => t.tags.some(tag => tag.includes('security')))).toBe(true);
+
+    // Filter by non-existent tag
+    app.agendaTagFilter.set('nonexistenttagxyz');
+    expect(app.visibleAgendaTasks().length).toBe(0);
+
+    // Reset filter
+    app.agendaTagFilter.set('');
+    expect(app.visibleAgendaTasks().length).toBeGreaterThan(0);
+  });
+
+  it('should navigate agenda cursor and target selected task in openTodoStateModal even when a clock is active', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+
+    const tasks = app.visibleAgendaTasks();
+    expect(tasks.length).toBeGreaterThan(1);
+
+    // Clock in on task 0
+    app.quickClockIn(tasks[0].id);
+    expect(app.orgEngine.getActiveClock()?.taskId).toBe(tasks[0].id);
+
+    // Navigate cursor to task 1
+    app.selectAgendaNextTask();
+    expect(app.selectedAgendaTaskId()).toBe(tasks[1].id);
+
+    // Open TODO state modal without passing taskId
+    app.openTodoStateModal();
+    // It should target task 1 (the selected task), NOT task 0 (the clocked-in task)
+    expect(app.targetTaskId()).toBe(tasks[1].id);
+
+    // State change updates task 1
+    app.selectFastTodoState('WAITING');
+    expect(app.orgEngine.getTask(tasks[1].id)?.state).toBe('WAITING');
+    expect(app.orgEngine.getTask(tasks[0].id)?.state).toBe('STARTED');
+  });
+
+  it('should automatically clock out task when transitioning to DONE', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+
+    const task = app.orgEngine.getAllTasks()[0];
+    app.quickClockIn(task.id);
+    expect(app.orgEngine.getActiveClock()?.taskId).toBe(task.id);
+
+    // Change state to DONE
+    app.openTodoStateModal(task.id);
+    app.selectFastTodoState('DONE');
+
+    // Clock must be stopped automatically
+    expect(app.orgEngine.getActiveClock()).toBeNull();
+    const updated = app.orgEngine.getTask(task.id);
+    expect(updated?.state).toBe('DONE');
+    expect(updated?.closedAt).toBeDefined();
+    expect(updated?.clocks.length).toBeGreaterThan(0);
+  });
+
+  it('should cycle manual tabs via actionStream', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    fixture.detectChanges();
+
+    app.openManual('shortcuts');
+    expect(app.selfDoc.activeTab()).toBe('shortcuts');
+
+    app.shortcutsService['actionSubject'].next('manual:tab:next');
+    expect(app.selfDoc.activeTab()).toBe('workflows');
+
+    app.shortcutsService['actionSubject'].next('manual:tab:next');
+    expect(app.selfDoc.activeTab()).toBe('describe');
+
+    app.shortcutsService['actionSubject'].next('manual:tab:prev');
+    expect(app.selfDoc.activeTab()).toBe('workflows');
+  });
 });
+

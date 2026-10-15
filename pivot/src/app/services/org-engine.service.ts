@@ -39,6 +39,14 @@ export class OrgEngineService {
     this.tasksSignal().filter(t => t.state === 'HOLD')
   );
 
+  public readonly doneTasks = computed(() =>
+    this.tasksSignal().filter(t => t.state === 'DONE' || t.state === 'CANCELLED')
+  );
+
+  public readonly inboxTasks = computed(() =>
+    this.tasksSignal().filter(t => t.file === 'refile.org')
+  );
+
   constructor() {
     this.seedDefaultTasks();
   }
@@ -68,6 +76,67 @@ export class OrgEngineService {
         logs: [{ timestamp: new Date().toISOString(), toState: 'TODO' }],
         subtasks: [],
         file: 'projects.org',
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 'task-org-3',
+        title: 'Follow up on client security audit feedback',
+        state: 'WAITING',
+        tags: ['security', 'client'],
+        properties: {},
+        clocks: [],
+        logs: [{ timestamp: new Date().toISOString(), toState: 'WAITING' }],
+        subtasks: [],
+        file: 'todo.org',
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 'task-org-4',
+        title: 'Quarterly infrastructure database migration',
+        state: 'HOLD',
+        effort: '2:00',
+        tags: ['infra', 'devops'],
+        properties: {},
+        clocks: [],
+        logs: [{ timestamp: new Date().toISOString(), toState: 'HOLD' }],
+        subtasks: [],
+        file: 'projects.org',
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 'task-org-5',
+        title: 'Setup hermetic Firejail chroot sandboxing for Org export',
+        state: 'DONE',
+        effort: '1:00',
+        tags: ['security', 'emacs'],
+        properties: {},
+        clocks: [
+          {
+            id: 'clock-seed-1',
+            startTime: new Date(Date.now() - 3900000).toISOString(),
+            endTime: new Date().toISOString(),
+            durationMinutes: 65,
+            note: 'Initial firejail sandbox configuration verified'
+          }
+        ],
+        logs: [
+          { timestamp: new Date().toISOString(), toState: 'DONE', note: 'All tests passed cleanly' }
+        ],
+        closedAt: new Date().toISOString(),
+        subtasks: [],
+        file: 'projects.org',
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 'task-org-6',
+        title: 'Inbox item: Capture thoughts on interval ergonomics',
+        state: 'TODO',
+        tags: ['habits', 'ergonomics'],
+        properties: {},
+        clocks: [],
+        logs: [{ timestamp: new Date().toISOString(), toState: 'TODO' }],
+        subtasks: [],
+        file: 'refile.org',
         createdAt: new Date().toISOString()
       }
     ];
@@ -119,6 +188,12 @@ export class OrgEngineService {
   }
 
   public setTaskState(id: string, newState: NorangTodoState, note?: string): boolean {
+    if (newState === 'DONE' || newState === 'CANCELLED') {
+      const active = this.activeClockSignal();
+      if (active && active.taskId === id) {
+        this.clockOut(note || 'Completed/Closed');
+      }
+    }
     let updated = false;
     this.tasksSignal.update(tasks =>
       tasks.map(t => {
