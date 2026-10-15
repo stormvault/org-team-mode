@@ -1,10 +1,10 @@
 # Implementation Plan: Norang Org-Mode PWA Integration with HabitFlow & Firebase MFA Phone Linking
 
 ## Phase 1: Research, Architecture & Project Scaffolding
-- [ ] Task: Document in-depth research on Norang Org-Mode features, keyboard mapping, PWA standards, and Firebase MFA phone linking architecture
-- [ ] Task: Scaffold Angular >= 22 application at `./pivot/` using `ng new` with standalone components and routing
-- [ ] Task: Configure Tailwind CSS, web font assets, Tone.js/Web Audio integration, and PWA manifest in `./pivot/`
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Document in-depth research on Norang Org-Mode features, keyboard mapping, PWA standards, and Firebase MFA phone linking architecture [26a4043]
+- [x] Task: Scaffold Angular >= 22 application at `./pivot/` using `ng new` with standalone components and routing [26a4043]
+- [x] Task: Configure Tailwind CSS, web font assets, Tone.js/Web Audio integration, and PWA manifest in `./pivot/` [26a4043]
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [26a4043]
 
 ## Phase 2: Norang Org-Mode Engine & Precision Keyboard Shortcuts
 - [ ] Task: Implement Norang task state machine (`TODO`, `NEXT`, `STARTED`, `WAITING`, `HOLD`, `DONE`, `CANCELLED`), fast selection, and transition logging
