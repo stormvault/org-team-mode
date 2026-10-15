@@ -224,7 +224,7 @@ describe('App Component (HabitFlow Org & Norang GTD Dashboard)', () => {
     expect(app.selfDoc.manualVisible()).toBe(true);
   });
 
-  it('should trigger voice assistant on microphone button click and answer shortcut queries', async () => {
+  it('should trigger voice assistant on microphone button click and render non-disruptive floating HUD', () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
     fixture.detectChanges();
@@ -233,20 +233,67 @@ describe('App Component (HabitFlow Org & Norang GTD Dashboard)', () => {
     const voiceBtn = compiled.querySelector('#btn-voice-assistant') as HTMLButtonElement;
     expect(voiceBtn).toBeTruthy();
 
-    // Clicking prominent microphone button triggers voice assistant
+    // Clicking prominent microphone button triggers floating HUD without modal takeover
     voiceBtn.click();
     fixture.detectChanges();
-    expect(app.selfDoc.manualVisible()).toBe(true);
-    expect(app.selfDoc.activeTab()).toBe('voice');
+    expect(app.selfDoc.voiceHudVisible()).toBe(true);
+    expect(app.selfDoc.manualVisible()).toBe(false);
+
+    const hudEl = compiled.querySelector('#voice-hud-overlay');
+    expect(hudEl).toBeTruthy();
 
     // Process a voice query: "which keyboard shortcut should be used to clock in"
-    app.submitManualVoiceText('which keyboard shortcut should be used to clock in');
+    app.submitHudVoiceText('which keyboard shortcut should be used to clock in');
     fixture.detectChanges();
 
-    expect(app.selfDoc.voiceResponse()).toBeTruthy();
+    expect(app.selfDoc.hudShortcut()?.action).toBe('clock_in');
     expect(app.selfDoc.voiceResponse()?.answer).toContain('Alt + Shift + I');
     expect(compiled.textContent).toContain('Alt + Shift + I');
     expect(compiled.textContent).toContain('Clock In to Selected Task / Habit');
+
+    // Run action from HUD directly
+    app.runHudAction('clock_in');
+    fixture.detectChanges();
+    expect(app.selfDoc.voiceHudVisible()).toBe(false);
+    expect(app.orgEngine.getActiveClock()).toBeTruthy();
+  });
+
+  it('should support interactive Try-Key muscle memory practice and instant barge-in in app', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    fixture.detectChanges();
+
+    // Open floating HUD and trigger shortcut response
+    app.triggerVoiceAssistant();
+    app.submitHudVoiceText('which shortcut to clock out');
+    fixture.detectChanges();
+
+    const shortcut = app.selfDoc.hudShortcut();
+    expect(shortcut?.action).toBe('clock_out');
+
+    // Start Try Key mode
+    app.selfDoc.startTryKey(shortcut!);
+    expect(app.selfDoc.tryKeyMode()).toBe(true);
+
+    // Simulate keydown event with matching chord
+    const event = new KeyboardEvent('keydown', { key: 'o', altKey: true, shiftKey: true });
+    window.dispatchEvent(event);
+    fixture.detectChanges();
+
+    expect(app.selfDoc.tryKeySuccess()).toBe(true);
+    expect(app.toast()?.message).toContain('Key chord verified');
+  });
+
+  it('should open manual voice tab when voice assistant is triggered from inside manual modal', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    fixture.detectChanges();
+
+    app.openManual('shortcuts');
+    expect(app.selfDoc.manualVisible()).toBe(true);
+
+    app.triggerVoiceAssistant();
+    expect(app.selfDoc.activeTab()).toBe('voice');
   });
 
   it('should inspect key events in describe-key inspector tab', async () => {

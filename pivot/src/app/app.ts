@@ -216,6 +216,10 @@ export class App implements OnInit, OnDestroy {
     if (this.authService.phoneMfaRequired()) {
       this.activeTab.set('link-phone');
     }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', this.handleGlobalKeyDown);
+    }
   }
 
   ngOnDestroy(): void {
@@ -225,7 +229,30 @@ export class App implements OnInit, OnDestroy {
     if (this.intervalTimerId) {
       clearInterval(this.intervalTimerId);
     }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('keydown', this.handleGlobalKeyDown);
+    }
   }
+
+  private handleGlobalKeyDown = (event: KeyboardEvent) => {
+    // Instant barge-in: typing any physical key stops ongoing speech synthesis
+    if (this.selfDoc.isSpeaking()) {
+      this.selfDoc.stopSpeaking();
+    }
+
+    // Interactive Try-Key Chord Practice verification
+    if (this.selfDoc.tryKeyMode()) {
+      if (event.key === 'Escape') {
+        this.selfDoc.dismissVoiceHud();
+        return;
+      }
+      const success = this.selfDoc.verifyTryChord(event);
+      if (success) {
+        event.preventDefault();
+        this.showToast('✓ Key chord verified! Muscle memory enrolled.');
+      }
+    }
+  };
 
   private initTheme(): void {
     if (typeof localStorage !== 'undefined') {
@@ -258,6 +285,9 @@ export class App implements OnInit, OnDestroy {
 
   private initShortcuts(): void {
     this.shortcutSub = this.shortcutsService.actionStream.subscribe(action => {
+      // Instant barge-in: any incoming shortcut action cancels speech synthesis
+      this.selfDoc.stopSpeaking();
+
       // Norang Fast Single-Key selection from modal
       if (action.startsWith('fast_state:')) {
         const state = action.replace('fast_state:', '') as NorangTodoState;
@@ -579,6 +609,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   public textVoiceInput = '';
+  public hudVoiceInput = '';
 
   public closeAllModals(): void {
     this.shortcutsService.setActiveModal('none');
@@ -616,9 +647,23 @@ export class App implements OnInit, OnDestroy {
   }
 
   public triggerVoiceAssistant(): void {
-    this.closeAllModals();
-    this.shortcutsService.setActiveModal('manual');
-    this.selfDoc.toggleVoiceRecognition();
+    if (this.selfDoc.manualVisible()) {
+      this.selfDoc.selectTab('voice');
+      this.selfDoc.toggleVoiceRecognition();
+      return;
+    }
+    this.selfDoc.toggleFloatingVoice();
+  }
+
+  public runHudAction(action: string): void {
+    this.selfDoc.dismissVoiceHud();
+    this.runShortcutAction(action);
+  }
+
+  public submitHudVoiceText(query: string): void {
+    if (!query.trim()) return;
+    this.selfDoc.processVoiceQuery(query);
+    this.hudVoiceInput = '';
   }
 
   public runShortcutAction(action: string): void {

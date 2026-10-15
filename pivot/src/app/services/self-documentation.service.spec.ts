@@ -142,4 +142,75 @@ describe('SelfDocumentationService', () => {
     expect(() => service.speakAnswer('Test speech')).not.toThrow();
     expect(() => service.stopSpeaking()).not.toThrow();
   });
+
+  it('should manage non-disruptive floating Voice HUD lifecycle without opening full-screen modal', () => {
+    expect(service.voiceHudVisible()).toBe(false);
+    expect(service.manualVisible()).toBe(false);
+
+    // Activate floating voice HUD
+    service.startFloatingVoice();
+    expect(service.voiceHudVisible()).toBe(true);
+    // Crucial: full-screen manual modal remains false so user context is not stolen!
+    expect(service.manualVisible()).toBe(false);
+    expect(service.hudAnswerText()).toContain('Listening');
+
+    // Query processing updates HUD state
+    service.processVoiceQuery('which shortcut to clock in');
+    expect(service.hudShortcut()?.action).toBe('clock_in');
+    expect(service.hudAnswerText()).toContain('Alt + Shift + I');
+
+    // Dismiss floating HUD
+    service.dismissVoiceHud();
+    expect(service.voiceHudVisible()).toBe(false);
+    expect(service.tryKeyMode()).toBe(false);
+  });
+
+  it('should validate Try-Key chords for progressive muscle memory enrollment', () => {
+    const clockInSc = service.shortcuts.find(s => s.action === 'clock_in')!;
+    service.startTryKey(clockInSc);
+
+    expect(service.tryKeyMode()).toBe(true);
+    expect(service.tryKeySuccess()).toBe(false);
+    expect(service.hudShortcut()?.action).toBe('clock_in');
+
+    // Press wrong key: should fail
+    const wrongKey = new KeyboardEvent('keydown', { key: 'x' });
+    const wrongRes = service.verifyTryChord(wrongKey);
+    expect(wrongRes).toBe(false);
+    expect(service.tryKeySuccess()).toBe(false);
+
+    // Press single-key shortcut: 'i'
+    const rightSingleKey = new KeyboardEvent('keydown', { key: 'i' });
+    const rightRes = service.verifyTryChord(rightSingleKey);
+    expect(rightRes).toBe(true);
+    expect(service.tryKeySuccess()).toBe(true);
+    expect(service.tryKeyMode()).toBe(false);
+
+    // Try full chord: Alt + Shift + I
+    service.startTryKey(clockInSc);
+    const chordEvent = new KeyboardEvent('keydown', { key: 'i', altKey: true, shiftKey: true });
+    expect(service.verifyTryChord(chordEvent)).toBe(true);
+    expect(service.tryKeySuccess()).toBe(true);
+  });
+
+  it('should schedule and cancel HUD dismissal timer on hover', () => {
+    vi.useFakeTimers();
+    service.startFloatingVoice();
+    expect(service.voiceHudVisible()).toBe(true);
+
+    // Schedule dismiss after 1000ms
+    service.scheduleHudDismiss(1000);
+
+    // Cancel dismiss (e.g. user hovers over HUD)
+    service.cancelHudDismiss();
+    vi.advanceTimersByTime(1500);
+    expect(service.voiceHudVisible()).toBe(true);
+
+    // Schedule again and allow to elapse
+    service.scheduleHudDismiss(500);
+    vi.advanceTimersByTime(600);
+    expect(service.voiceHudVisible()).toBe(false);
+
+    vi.useRealTimers();
+  });
 });

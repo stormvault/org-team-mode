@@ -54,6 +54,15 @@ export class SelfDocumentationService {
   public readonly isSpeaking = signal<boolean>(false);
   public readonly voiceResponse = signal<VoiceQueryResponse | null>(null);
 
+  // Non-Disruptive Floating HUD & Progressive Keyboard Enrollment State
+  public readonly voiceHudVisible = signal<boolean>(false);
+  public readonly hudShortcut = signal<ShortcutItem | null>(null);
+  public readonly hudQueryText = signal<string>('');
+  public readonly hudAnswerText = signal<string>('');
+  public readonly tryKeyMode = signal<boolean>(false);
+  public readonly tryKeySuccess = signal<boolean>(false);
+  private hudDismissTimer: any = null;
+
   // Native Web Speech recognition instance
   private recognition: any = null;
   public readonly isSpeechSupported = signal<boolean>(false);
@@ -449,6 +458,7 @@ export class SelfDocumentationService {
             currentTranscript += event.results[i][0].transcript;
           }
           this.transcript.set(currentTranscript);
+          this.hudQueryText.set(currentTranscript);
 
           // If speech recognition result is final, process the query
           const lastResult = event.results[event.results.length - 1];
@@ -473,6 +483,125 @@ export class SelfDocumentationService {
     } else {
       this.isSpeechSupported.set(false);
     }
+  }
+
+  /**
+   * Activates non-disruptive floating Head-Up Display (HUD) voice recognition
+   * without opening full-screen modal or losing editor cursor/scroll context.
+   */
+  public startFloatingVoice(): void {
+    this.voiceHudVisible.set(true);
+    this.tryKeyMode.set(false);
+    this.tryKeySuccess.set(false);
+    this.transcript.set('');
+    this.speechError.set(null);
+    this.hudQueryText.set('');
+    this.hudAnswerText.set('Listening for your shortcut question...');
+    this.cancelHudDismiss();
+
+    if (this.recognition) {
+      try {
+        this.recognition.start();
+      } catch (e: any) {
+        // Recognition might already be running
+        this.isListening.set(true);
+      }
+    } else {
+      this.speechError.set('Web Speech API is not supported in this browser. Use sample queries or quick input below.');
+    }
+  }
+
+  /**
+   * Toggles the non-disruptive floating HUD voice assistant
+   */
+  public toggleFloatingVoice(): void {
+    if (this.voiceHudVisible() && this.isListening()) {
+      this.dismissVoiceHud();
+    } else {
+      this.startFloatingVoice();
+    }
+  }
+
+  /**
+   * Dismisses the floating HUD and cancels any ongoing speech operations
+   */
+  public dismissVoiceHud(): void {
+    this.voiceHudVisible.set(false);
+    this.tryKeyMode.set(false);
+    this.tryKeySuccess.set(false);
+    this.cancelHudDismiss();
+    this.stopSpeaking();
+    this.stopVoiceRecognition();
+  }
+
+  /**
+   * Schedules automatic fade-out dismissal of the floating HUD
+   */
+  public scheduleHudDismiss(delayMs: number = 4000): void {
+    this.cancelHudDismiss();
+    if (typeof window !== 'undefined') {
+      this.hudDismissTimer = setTimeout(() => {
+        this.dismissVoiceHud();
+      }, delayMs);
+    }
+  }
+
+  /**
+   * Cancels scheduled dismissal (e.g. when user hovers or is practicing chords)
+   */
+  public cancelHudDismiss(): void {
+    if (this.hudDismissTimer) {
+      clearTimeout(this.hudDismissTimer);
+      this.hudDismissTimer = null;
+    }
+  }
+
+  /**
+   * Activates interactive keyboard enrollment practice for the specified shortcut
+   */
+  public startTryKey(shortcut?: ShortcutItem): void {
+    if (shortcut) {
+      this.hudShortcut.set(shortcut);
+    }
+    this.tryKeyMode.set(true);
+    this.tryKeySuccess.set(false);
+    this.cancelHudDismiss();
+    this.stopSpeaking();
+  }
+
+  /**
+   * Validates whether the user's pressed physical keyboard chord matches the target shortcut.
+   * Provides immediate feedback and positive reinforcement for muscle memory acquisition.
+   */
+  public verifyTryChord(event: KeyboardEvent): boolean {
+    const target = this.hudShortcut();
+    if (!target) return false;
+
+    const matched = this.inspectKeyChord(event);
+    const keyLower = event.key.toLowerCase();
+
+    const isMatch =
+      (matched && matched.action === target.action) ||
+      (target.action === 'clock_in' && (keyLower === 'i' || (event.altKey && event.shiftKey && keyLower === 'i'))) ||
+      (target.action === 'clock_out' && (keyLower === 'o' || (event.altKey && event.shiftKey && keyLower === 'o'))) ||
+      (target.action === 'capture' && (keyLower === 'c' || (event.altKey && event.shiftKey && keyLower === 'c'))) ||
+      (target.action === 'refile' && (keyLower === 'r' || (event.altKey && event.shiftKey && keyLower === 'r'))) ||
+      (target.action === 'todo_state' && (keyLower === 't' || (event.altKey && event.shiftKey && keyLower === 't'))) ||
+      (target.action === 'agenda' && (keyLower === 'a' || (event.altKey && event.shiftKey && keyLower === 'a'))) ||
+      (target.action === 'org' && (keyLower === 'b' || (event.altKey && event.shiftKey && keyLower === 'b'))) ||
+      (target.action === 'export' && (keyLower === 'e' || (event.altKey && event.shiftKey && keyLower === 'e'))) ||
+      (target.action === 'toggle_view' && (keyLower === 'h' || (event.altKey && event.shiftKey && keyLower === 'h'))) ||
+      (target.action === 'projects' && (keyLower === 'p' || (event.altKey && event.shiftKey && keyLower === 'p'))) ||
+      (target.action === 'filter_agenda' && event.key === '/') ||
+      (target.action === 'manual' && (event.key === '?' || event.key === 'F1' || (event.ctrlKey && keyLower === 'h')));
+
+    if (isMatch) {
+      this.tryKeySuccess.set(true);
+      this.tryKeyMode.set(false);
+      this.scheduleHudDismiss(2500);
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -515,10 +644,6 @@ export class SelfDocumentationService {
     this.isListening.set(false);
   }
 
-  /**
-   * Processes a spoken query (e.g. "which keyboard shortcut should be used to clock in")
-   * Finds matching shortcut, prepares verbal answer, and speaks aloud via SpeechSynthesis.
-   */
   /**
    * Processes a spoken query (e.g. "which keyboard shortcut should be used to clock in")
    * Finds matching shortcut, prepares verbal answer, and speaks aloud via SpeechSynthesis.
@@ -649,6 +774,18 @@ export class SelfDocumentationService {
     };
 
     this.voiceResponse.set(response);
+    this.hudQueryText.set(raw);
+    this.hudAnswerText.set(answer);
+    if (matched.length > 0) {
+      this.hudShortcut.set(matched[0]);
+    } else {
+      this.hudShortcut.set(null);
+    }
+
+    if (this.voiceHudVisible()) {
+      this.scheduleHudDismiss(5000);
+    }
+
     this.speakAnswer(answer);
     return response;
   }

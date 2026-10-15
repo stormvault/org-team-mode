@@ -1634,6 +1634,164 @@
     </div>
   }
 
+  <!-- NON-DISRUPTIVE FLOATING VOICE HEAD-UP DISPLAY (HUD) OVERLAY -->
+  @if (selfDoc.voiceHudVisible()) {
+    <div
+      id="voice-hud-overlay"
+      (mouseenter)="selfDoc.cancelHudDismiss()"
+      (mouseleave)="selfDoc.scheduleHudDismiss(4000)"
+      class="fixed top-18 right-4 sm:right-6 z-40 max-w-sm sm:max-w-md w-full bg-slate-900/95 dark:bg-slate-950/95 border border-indigo-500/50 rounded-2xl shadow-2xl backdrop-blur-md p-4 text-slate-100 transition-all duration-200 animate-pop">
+
+      <!-- Header Bar -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+        <div class="flex items-center gap-2">
+          <span
+            [class.bg-rose-500]="selfDoc.isListening()"
+            [class.bg-emerald-400]="!selfDoc.isListening()"
+            [class.animate-pulse]="selfDoc.isListening()"
+            class="w-2.5 h-2.5 rounded-full inline-block"></span>
+          <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">
+            {{ selfDoc.isListening() ? 'Voice Assistant • Listening...' : 'Voice Assistant HUD' }}
+          </span>
+        </div>
+        <div class="flex items-center gap-2">
+          @if (selfDoc.isSpeaking()) {
+            <button
+              (click)="selfDoc.stopSpeaking()"
+              title="Stop Speech Audio (Barge-in)"
+              class="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white text-[10px] font-bold transition">
+              ⏹ Mute
+            </button>
+          }
+          <button
+            (click)="selfDoc.dismissVoiceHud()"
+            title="Dismiss HUD (Esc)"
+            class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-xs transition">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <!-- Spoken Query / Real-time Transcript -->
+      <div class="mt-2.5 px-3 py-2 rounded-xl bg-slate-950/70 border border-slate-800/80 text-xs">
+        <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Your Question:</span>
+        <p class="text-slate-200 italic">
+          "{{ selfDoc.hudQueryText() || selfDoc.transcript() || 'Ask which keyboard shortcut to use...' }}"
+        </p>
+      </div>
+
+      <!-- Answer / Error Notice -->
+      @if (selfDoc.speechError(); as error) {
+        <div class="mt-2.5 p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/30 text-[11px] text-rose-300 leading-snug">
+          {{ error }}
+        </div>
+      } @else if (selfDoc.hudAnswerText(); as answer) {
+        <div class="mt-2.5 p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-xs text-indigo-200 leading-relaxed">
+          <span class="text-[10px] uppercase font-bold text-indigo-400 block mb-0.5">Voice Answer:</span>
+          {{ answer }}
+        </div>
+      }
+
+      <!-- Recommended Shortcut Card with Keycaps -->
+      @if (selfDoc.hudShortcut(); as sc) {
+        <div class="mt-3 p-3 rounded-xl bg-slate-950 border border-indigo-500/30 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <kbd class="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 font-mono font-bold text-indigo-400 text-xs shadow-inner">
+              {{ sc.keys }}
+            </kbd>
+            <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              {{ sc.category }}
+            </span>
+          </div>
+
+          <div>
+            <div class="text-xs font-semibold text-white">{{ sc.description }}</div>
+            <p class="text-[11px] text-slate-400 leading-snug mt-0.5">{{ sc.norangContext }}</p>
+          </div>
+
+          <!-- Interactive Action & Try-Key Muscle Memory Controls -->
+          <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+            <button
+              (click)="runHudAction(sc.action)"
+              class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition active:scale-95 shadow-md shadow-indigo-600/30">
+              Run Action
+            </button>
+
+            @if (selfDoc.tryKeySuccess()) {
+              <span class="text-[11px] font-bold text-emerald-400 animate-pulse flex items-center gap-1">
+                ✓ Muscle Memory Enrolled!
+              </span>
+            } @else if (selfDoc.tryKeyMode()) {
+              <span class="text-[11px] font-bold text-amber-400 animate-pulse flex items-center gap-1">
+                ⌨ Press <kbd class="px-1 py-0.5 rounded bg-slate-800 text-[10px] text-amber-300 font-mono">{{ sc.keys }}</kbd> now!
+              </span>
+            } @else {
+              <button
+                (click)="selfDoc.startTryKey(sc)"
+                title="Practice pressing the shortcut keys to build muscle memory"
+                class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium text-xs transition border border-slate-700">
+                Try Key (Practice)
+              </button>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- One-Click Sample Voice Queries (For Low-Friction Discovery) -->
+      <div class="mt-3 space-y-1.5">
+        <span class="text-[10px] font-bold text-slate-400 block uppercase">Quick Shortcuts:</span>
+        <div class="flex flex-wrap gap-1.5 text-[11px]">
+          <button
+            (click)="submitHudVoiceText('which keyboard shortcut should be used to clock in')"
+            class="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition text-[10px]">
+            Clock In
+          </button>
+          <button
+            (click)="submitHudVoiceText('which shortcut to clock out')"
+            class="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition text-[10px]">
+            Clock Out
+          </button>
+          <button
+            (click)="submitHudVoiceText('how do I capture a new task')"
+            class="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition text-[10px]">
+            Capture
+          </button>
+          <button
+            (click)="submitHudVoiceText('how to refile tasks')"
+            class="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition text-[10px]">
+            Refile
+          </button>
+          <button
+            (click)="submitHudVoiceText('how to change todo state to DONE')"
+            class="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition text-[10px]">
+            TODO State
+          </button>
+          <button
+            (click)="submitHudVoiceText('open Norang agenda')"
+            class="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition text-[10px]">
+            Agenda
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Text Fallback Input -->
+      <div class="mt-3 pt-2 border-t border-slate-800 flex items-center gap-1.5">
+        <input
+          type="text"
+          [(ngModel)]="hudVoiceInput"
+          (keyup.enter)="submitHudVoiceText(hudVoiceInput)"
+          placeholder="Type question (e.g. 'how to clock in')..."
+          class="flex-1 bg-slate-950 px-2.5 py-1.5 rounded-lg text-xs border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-200 placeholder:text-slate-500">
+        <button
+          (click)="submitHudVoiceText(hudVoiceInput)"
+          class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition">
+          Ask
+        </button>
+      </div>
+
+    </div>
+  }
+
   <!-- TOAST NOTIFICATION -->
   @if (toast(); as t) {
     <div class="fixed bottom-5 right-5 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-800 text-white text-xs font-medium shadow-xl border border-slate-700/80 animate-pop">
