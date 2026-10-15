@@ -7,13 +7,13 @@
 - [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [26a4043]
 
 ## Phase 2: Norang Org-Mode Engine & Precision Keyboard Shortcuts
-- [ ] Task: Implement Norang task state machine (`TODO`, `NEXT`, `STARTED`, `WAITING`, `HOLD`, `DONE`, `CANCELLED`), fast selection, and transition logging
-- [ ] Task: Implement Org Capture system (templates for Tasks, Habits, Notes, Phone Calls, Meetings) and Refiling engine
-- [ ] Task: Implement Custom Agenda views (Daily/Weekly Schedule, NEXT Actions, Waiting/Hold, Stuck Projects) and Tag Filtering
-- [ ] Task: Implement Time Clocking (Clock In/Out, history, default task, effort estimates, clock reports, overtime warning)
-- [ ] Task: Implement Org-Babel code execution simulator, literate tangling, and document exporters (Markdown, HTML, CSV)
-- [ ] Task: Implement browser-safe, non-default keyboard shortcuts manager (`Alt+Shift+*`, modal hotkeys, cheat sheet modal)
-- [ ] Task: Phase Verification & Checkpoint (Refer to workflow.md)
+- [x] Task: Implement Norang task state machine (`TODO`, `NEXT`, `STARTED`, `WAITING`, `HOLD`, `DONE`, `CANCELLED`), fast selection, and transition logging [8276beb]
+- [x] Task: Implement Org Capture system (templates for Tasks, Habits, Notes, Phone Calls, Meetings) and Refiling engine [8276beb]
+- [x] Task: Implement Custom Agenda views (Daily/Weekly Schedule, NEXT Actions, Waiting/Hold, Stuck Projects) and Tag Filtering [8276beb]
+- [x] Task: Implement Time Clocking (Clock In/Out, history, default task, effort estimates, clock reports, overtime warning) [8276beb]
+- [x] Task: Implement Org-Babel code execution simulator, literate tangling, and document exporters (Markdown, HTML, CSV) [8276beb]
+- [x] Task: Implement browser-safe, non-default keyboard shortcuts manager (`Alt+Shift+*`, modal hotkeys, cheat sheet modal) [8276beb]
+- [x] Task: Phase Verification & Checkpoint (Refer to workflow.md) [8276beb]
 
 ## Phase 3: HabitFlow Pro Integration & Progressive Web Application (PWA)
 - [ ] Task: Integrate HabitFlow Pro dashboard (daily streaks, precision interval timers, Tone.js / Web Audio chimes, KPI cards) into Angular components
