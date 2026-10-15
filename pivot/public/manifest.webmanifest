@@ -1,0 +1,39 @@
+{
+  "name": "HabitFlow Org — Precision Habits & Norang Org Mode PWA",
+  "short_name": "HabitFlow Org",
+  "description": "Progressive Web Application combining HabitFlow Pro precision interval tracking with Norang Org Mode lifetime workflows, offline storage, and Firebase MFA phone linking.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#090d16",
+  "theme_color": "#4f46e5",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Quick Capture",
+      "short_name": "Capture",
+      "description": "Quickly capture a task, note, or meeting",
+      "url": "/?action=capture"
+    },
+    {
+      "name": "Custom Agenda",
+      "short_name": "Agenda",
+      "description": "Open Norang Multi-Block Custom Agenda",
+      "url": "/?action=agenda"
+    },
+    {
+      "name": "Interval Timers",
+      "short_name": "Intervals",
+      "description": "View active interval habits",
+      "url": "/?view=intervals"
+    }
+  ]
+}
