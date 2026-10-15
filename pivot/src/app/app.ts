@@ -22,8 +22,8 @@ import { Subscription } from 'rxjs';
 export class App implements OnInit, OnDestroy {
   protected readonly title = signal('HabitFlow Org — Precision Habits & Norang Org Mode');
 
-  // Active view tab
-  public readonly activeTab = signal<'daily' | 'intervals' | 'agenda' | 'org' | 'collab'>('daily');
+  // Active view tab (including dedicated link-phone view for incomplete Phone MFA)
+  public readonly activeTab = signal<'daily' | 'intervals' | 'agenda' | 'org' | 'collab' | 'link-phone'>('daily');
 
   // UI Preferences
   public readonly darkMode = signal<boolean>(true);
@@ -70,6 +70,13 @@ export class App implements OnInit, OnDestroy {
   // Subscriptions & Timers
   private shortcutSub?: Subscription;
   private intervalTimerId?: any;
+
+  // Accessible Org Files (Segregated Personal vs Collaborative Project Files)
+  public readonly accessibleFiles = computed(() => {
+    const user = this.authService.currentUser();
+    const uid = user ? user.uid : 'default';
+    return this.collabService.getAccessibleFiles(uid);
+  });
 
   // Computed helper for first active interval habit
   public readonly activeIntervalHabit = computed(() => {
@@ -153,6 +160,11 @@ export class App implements OnInit, OnDestroy {
     this.initShortcuts();
     this.loadSelectedOrgFile();
     this.startIntervalTicker();
+
+    // Enforce initial MFA check: redirect if user is authenticated but MFA incomplete
+    if (this.authService.phoneMfaRequired()) {
+      this.activeTab.set('link-phone');
+    }
   }
 
   ngOnDestroy(): void {
@@ -195,12 +207,25 @@ export class App implements OnInit, OnDestroy {
 
   private initShortcuts(): void {
     this.shortcutSub = this.shortcutsService.actionStream.subscribe(action => {
+      // Norang Fast Single-Key selection from modal
+      if (action.startsWith('fast_state:')) {
+        const state = action.replace('fast_state:', '') as NorangTodoState;
+        this.selectFastTodoState(state);
+        return;
+      }
+      if (action.startsWith('capture_tpl:')) {
+        const tplKey = action.replace('capture_tpl:', '');
+        this.captureTemplateKey = tplKey;
+        this.showToast(`Selected template: [${tplKey}]`);
+        return;
+      }
+
       switch (action) {
         case 'capture':
           this.openCaptureModal();
           break;
         case 'agenda':
-          this.activeTab.set('agenda');
+          this.selectTab('agenda');
           break;
         case 'toggle_view':
           this.toggleHabitView();
@@ -221,7 +246,7 @@ export class App implements OnInit, OnDestroy {
           this.exportModalOpen.set(true);
           break;
         case 'projects':
-          this.activeTab.set('collab');
+          this.selectTab('collab');
           break;
         case 'escape':
           this.closeAllModals();
@@ -250,12 +275,28 @@ export class App implements OnInit, OnDestroy {
     }, 3000);
   }
 
+  /**
+   * Navigation method strictly enforcing Firebase Phone MFA requirement.
+   * Registered users with incomplete MFA are redirected to account linking registration.
+   */
+  public selectTab(tab: 'daily' | 'intervals' | 'agenda' | 'org' | 'collab' | 'link-phone'): void {
+    if (
+      this.authService.phoneMfaRequired() &&
+      (tab === 'daily' || tab === 'intervals' || tab === 'agenda' || tab === 'org')
+    ) {
+      this.activeTab.set('link-phone');
+      this.showToast('Access Denied: Firebase Phone MFA required. Redirecting to account linking...', 'ph-warning-circle');
+      return;
+    }
+    this.activeTab.set(tab);
+  }
+
   public toggleHabitView(): void {
     const current = this.activeTab();
     if (current === 'daily') {
-      this.activeTab.set('intervals');
+      this.selectTab('intervals');
     } else {
-      this.activeTab.set('daily');
+      this.selectTab('daily');
     }
   }
 
@@ -276,6 +317,7 @@ export class App implements OnInit, OnDestroy {
 
   // Org Capture Modal
   public openCaptureModal(): void {
+    this.shortcutsService.setActiveModal('capture');
     this.captureModalOpen.set(true);
   }
 
@@ -299,6 +341,7 @@ export class App implements OnInit, OnDestroy {
     this.captureTitle = '';
     this.captureBody = '';
     this.captureTags = '';
+    this.shortcutsService.setActiveModal('none');
     this.captureModalOpen.set(false);
   }
 
@@ -315,6 +358,7 @@ export class App implements OnInit, OnDestroy {
         if (first) this.targetTaskId.set(first.id);
       }
     }
+    this.shortcutsService.setActiveModal('todo_state');
     this.todoStateModalOpen.set(true);
   }
 
@@ -324,6 +368,7 @@ export class App implements OnInit, OnDestroy {
       this.orgEngine.setTaskState(id, state);
       this.showToast(`Updated task state to [${state}]`);
     }
+    this.shortcutsService.setActiveModal('none');
     this.todoStateModalOpen.set(false);
   }
 
@@ -337,6 +382,7 @@ export class App implements OnInit, OnDestroy {
         this.targetTaskId.set(firstRefile.id);
       }
     }
+    this.shortcutsService.setActiveModal('refile');
     this.refileModalOpen.set(true);
   }
 
@@ -346,6 +392,7 @@ export class App implements OnInit, OnDestroy {
       this.orgEngine.refileTask(id, targetFile);
       this.showToast(`Refiled task to ${targetFile}`);
     }
+    this.shortcutsService.setActiveModal('none');
     this.refileModalOpen.set(false);
   }
 
@@ -370,6 +417,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   public closeAllModals(): void {
+    this.shortcutsService.setActiveModal('none');
     this.captureModalOpen.set(false);
     this.todoStateModalOpen.set(false);
     this.refileModalOpen.set(false);
@@ -380,13 +428,17 @@ export class App implements OnInit, OnDestroy {
   // Org Plain Text & Babel
   public async loadSelectedOrgFile(): Promise<void> {
     const filename = this.selectedOrgFile();
-    const content = await this.storageService.loadOrgFile(filename);
+    const user = this.authService.currentUser();
+    const uid = user ? user.uid : 'default';
+    const content = await this.storageService.loadOrgFile(filename, uid);
     this.orgFileContent = content || `#+TITLE: ${filename}\n\n`;
   }
 
   public async saveOrgFile(): Promise<void> {
     const filename = this.selectedOrgFile();
-    await this.storageService.saveOrgFile(filename, this.orgFileContent);
+    const user = this.authService.currentUser();
+    const uid = user ? user.uid : 'default';
+    await this.storageService.saveOrgFile(filename, this.orgFileContent, uid);
     this.showToast(`Saved ${filename} to browser storage!`);
   }
 
@@ -397,19 +449,31 @@ export class App implements OnInit, OnDestroy {
   }
 
   // Auth & Phone MFA
-  public async loginWithGoogle(): Promise<void> {
+  public async loginWithGoogle(customEmail?: string, customName?: string): Promise<void> {
     try {
-      await this.authService.signInWithGoogle();
-      this.showToast('Signed in with Google! Mandatory Phone MFA required.');
+      await this.authService.signInWithGoogle(customEmail, customName);
+      if (this.authService.phoneMfaRequired()) {
+        this.activeTab.set('link-phone');
+        this.showToast('Signed in with Google! Mandatory Phone MFA required. Redirecting to Account Linking Registration...', 'ph-warning-circle');
+      } else {
+        this.loadSelectedOrgFile();
+        this.showToast('Signed in with Google! Welcome back.');
+      }
     } catch (e: any) {
       this.authMessage.set(e.message);
     }
   }
 
-  public async loginWithEmail(): Promise<void> {
+  public async loginWithEmail(email = 'user@example.com', pass = 'password'): Promise<void> {
     try {
-      await this.authService.signInWithEmail('user@example.com', 'password');
-      this.showToast('Signed in with Email! Mandatory Phone MFA required.');
+      await this.authService.signInWithEmail(email, pass);
+      if (this.authService.phoneMfaRequired()) {
+        this.activeTab.set('link-phone');
+        this.showToast('Signed in with Email! Mandatory Phone MFA required. Redirecting to Account Linking Registration...', 'ph-warning-circle');
+      } else {
+        this.loadSelectedOrgFile();
+        this.showToast('Signed in with Email! Welcome back.');
+      }
     } catch (e: any) {
       this.authMessage.set(e.message);
     }
@@ -431,9 +495,24 @@ export class App implements OnInit, OnDestroy {
     try {
       await this.authService.linkPhoneMfa(confId, this.smsCodeInput);
       this.phoneConfirmationId.set(null);
+      this.authMessage.set(null);
       this.showToast('Phone MFA verified & account linked successfully! Full Org access granted.');
+      this.activeTab.set('daily');
+      this.loadSelectedOrgFile();
     } catch (e: any) {
       this.authMessage.set(e.message);
+    }
+  }
+
+  public switchActiveUser(uid: string): void {
+    this.authService.switchUser(uid);
+    const user = this.authService.currentUser();
+    if (user && !user.phoneMfaLinked) {
+      this.activeTab.set('link-phone');
+      this.showToast(`Switched to ${user.displayName}. Phone MFA required! Redirecting...`, 'ph-warning-circle');
+    } else {
+      this.loadSelectedOrgFile();
+      this.showToast(`Switched active user to ${user?.displayName || 'User'}`);
     }
   }
 
@@ -449,19 +528,48 @@ export class App implements OnInit, OnDestroy {
     const projects = this.collabService.projects();
     if (projects.length === 0 || !this.inviteEmail.trim()) return;
     const projectId = projects[0].id;
-    await this.collabService.inviteByEmail(projectId, this.inviteEmail.trim());
-    this.showToast(`Invitation sent to ${this.inviteEmail}!`);
-    this.inviteEmail = '';
+    const success = await this.collabService.inviteByEmail(projectId, this.inviteEmail.trim());
+    if (success) {
+      this.showToast(`Invitation sent to ${this.inviteEmail}!`);
+      this.inviteEmail = '';
+    } else {
+      this.showToast(`Could not send invite to ${this.inviteEmail}. Already in project or invalid.`);
+    }
   }
 
+  /**
+   * Adds an existing registered user to a specific project by name,
+   * requiring that the user is registered with Email/Google Auth AND has completed Phone MFA.
+   */
   public addMember(): void {
     const projects = this.collabService.projects();
-    if (projects.length === 0 || !this.addMemberName.trim() || !this.addMemberEmail.trim()) return;
+    if (projects.length === 0 || !this.addMemberName.trim()) return;
     const projectId = projects[0].id;
-    this.collabService.addMemberByName(projectId, this.addMemberName.trim(), this.addMemberEmail.trim());
-    this.showToast(`Added member ${this.addMemberName} to project!`);
-    this.addMemberName = '';
-    this.addMemberEmail = '';
+
+    const res = this.collabService.addMemberByName(projectId, this.addMemberName.trim());
+    if (res.success) {
+      this.showToast(`Added registered collaborator ${res.member?.name} to project!`);
+      this.addMemberName = '';
+      this.addMemberEmail = '';
+      this.authMessage.set(null);
+    } else {
+      this.authMessage.set(res.error || 'Failed to add member.');
+      this.showToast(res.error || 'Failed to add member.', 'ph-warning-circle');
+    }
+  }
+
+  public addEligibleUser(name: string): void {
+    const projects = this.collabService.projects();
+    if (projects.length === 0) return;
+    const projectId = projects[0].id;
+    const res = this.collabService.addMemberByName(projectId, name);
+    if (res.success) {
+      this.showToast(`Added ${name} to project!`);
+      this.authMessage.set(null);
+    } else {
+      this.authMessage.set(res.error || 'Failed to add member.');
+      this.showToast(res.error || 'Failed to add member.', 'ph-warning-circle');
+    }
   }
 
   // Exporters

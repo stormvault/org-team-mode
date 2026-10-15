@@ -15,7 +15,7 @@ export class ProjectCollaborationService {
 
   private seedProjects(): void {
     const user = this.authService.currentUser();
-    const ownerUid = user ? user.uid : 'default-user-uid';
+    const ownerUid = user ? user.uid : 'google-user-alice';
 
     const sampleProject: CollaborativeProject = {
       id: 'proj-phoenix',
@@ -24,8 +24,8 @@ export class ProjectCollaborationService {
       members: [
         {
           uid: ownerUid,
-          name: user?.displayName || 'Primary User',
-          email: user?.email || 'user@example.com',
+          name: user?.displayName || 'Alice Engineer',
+          email: user?.email || 'alice@google.com',
           role: 'owner',
           invitedAt: new Date().toISOString()
         }
@@ -39,6 +39,24 @@ export class ProjectCollaborationService {
 
   public getPersonalFiles(): string[] {
     return ['refile.org', 'todo.org', 'habits.org', 'notes.org', 'archive.org'];
+  }
+
+  public getAccessibleFiles(userId?: string): { personal: string[]; projects: string[] } {
+    const uid = userId || this.authService.currentUser()?.uid || 'default';
+    const personal = this.getPersonalFiles();
+    const projectFiles: string[] = [];
+
+    this.projectsSignal().forEach(p => {
+      const isMember = p.ownerUid === uid || p.members.some(m => m.uid === uid);
+      if (isMember) {
+        projectFiles.push(...p.orgFiles);
+      }
+    });
+
+    return {
+      personal,
+      projects: Array.from(new Set(projectFiles))
+    };
   }
 
   public getProject(projectId: string): CollaborativeProject | undefined {
@@ -76,10 +94,18 @@ export class ProjectCollaborationService {
     const project = this.getProject(projectId);
     if (!project) return false;
 
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) return false;
+
+    // Check if already in project
+    if (project.members.some(m => m.email.toLowerCase() === trimmedEmail.toLowerCase())) {
+      return false;
+    }
+
     const newMember: ProjectMember = {
       uid: `invited-${Math.random().toString(36).slice(2, 7)}`,
-      name: email.split('@')[0],
-      email,
+      name: trimmedEmail.split('@')[0],
+      email: trimmedEmail,
       role: 'editor',
       invitedAt: new Date().toISOString()
     };
@@ -98,14 +124,52 @@ export class ProjectCollaborationService {
     return true;
   }
 
-  public addMemberByName(projectId: string, name: string, email: string): boolean {
+  /**
+   * Adds an already registered user (Email or Google Auth) by name,
+   * strictly requiring that Firebase Phone Authentication MFA is completed.
+   */
+  public addMemberByName(
+    projectId: string,
+    name: string,
+    _optionalEmail?: string
+  ): { success: boolean; error?: string; member?: ProjectMember } {
     const project = this.getProject(projectId);
-    if (!project) return false;
+    if (!project) {
+      return { success: false, error: `Project not found.` };
+    }
+
+    // Lookup user in registered users directory
+    const registeredUser = this.authService.findRegisteredUserByName(name);
+    if (!registeredUser) {
+      return {
+        success: false,
+        error: `User "${name}" is not registered. Users must be registered with Firebase Google or Email Authentication.`
+      };
+    }
+
+    // Mandatory Phone Authentication MFA check
+    if (!registeredUser.phoneMfaLinked) {
+      return {
+        success: false,
+        error: `User "${registeredUser.displayName || name}" has not completed Firebase Phone Authentication MFA. Mandatory Phone MFA is required to collaborate on projects.`
+      };
+    }
+
+    // Check if already a member
+    const alreadyMember = project.members.some(
+      m => m.uid === registeredUser.uid || m.email.toLowerCase() === (registeredUser.email || '').toLowerCase()
+    );
+    if (alreadyMember) {
+      return {
+        success: false,
+        error: `User "${registeredUser.displayName || name}" is already a member of this project.`
+      };
+    }
 
     const newMember: ProjectMember = {
-      uid: `registered-${Math.random().toString(36).slice(2, 7)}`,
-      name,
-      email,
+      uid: registeredUser.uid,
+      name: registeredUser.displayName || name,
+      email: registeredUser.email || '',
       role: 'editor',
       invitedAt: new Date().toISOString()
     };
@@ -121,6 +185,16 @@ export class ProjectCollaborationService {
         return p;
       })
     );
-    return true;
+
+    return { success: true, member: newMember };
+  }
+
+  public getEligibleUsersToAdd(projectId: string) {
+    const project = this.getProject(projectId);
+    if (!project) return [];
+
+    const memberUids = new Set(project.members.map(m => m.uid));
+    // Must be registered AND have Phone MFA linked AND not currently a member
+    return this.authService.getEligibleCollaborators().filter(u => !memberUids.has(u.uid));
   }
 }

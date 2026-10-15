@@ -44,6 +44,9 @@ describe('HabitService (HabitFlow Pro Precision Engine)', () => {
         // Verify Org-mode task was updated or exists
         const orgTasks = orgService.getAllTasks();
         expect(orgTasks.some(t => t.file === 'habits.org' || t.title.includes(intervalHabit.name))).toBe(true);
+        const orgTask = orgService.getTask(`org-${intervalHabit.id}`);
+        expect(orgTask?.scheduled).toBeDefined();
+        expect(orgTask?.logs.some(l => l.note?.includes('advanced repeater'))).toBe(true);
       }
     });
 

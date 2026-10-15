@@ -41,11 +41,31 @@ export class StorageService {
   :CATEGORY: Mindfulness
   :END:`;
 
-    this.inMemoryFiles.set('todo.org', defaultTodo);
-    this.inMemoryFiles.set('habits.org', defaultHabits);
-    this.inMemoryFiles.set('refile.org', '#+TITLE: Refile Inbox\n\n');
-    this.inMemoryFiles.set('projects.org', '#+TITLE: Active Projects\n\n');
-    this.inMemoryFiles.set('archive.org', '#+TITLE: Org Archive\n\n');
+    this.inMemoryFiles.set('user:default:todo.org', defaultTodo);
+    this.inMemoryFiles.set('user:default:habits.org', defaultHabits);
+    this.inMemoryFiles.set('user:default:refile.org', '#+TITLE: Refile Inbox\n\n');
+    this.inMemoryFiles.set('user:default:projects.org', '#+TITLE: Active Projects\n\n');
+    this.inMemoryFiles.set('user:default:archive.org', '#+TITLE: Org Archive\n\n');
+
+    // Sample collaborative project file
+    this.inMemoryFiles.set(
+      'proj:projects/phoenix.org',
+      `#+TITLE: Phoenix Infrastructure Project\n* TODO Set up multi-region failover :infra:\n* NEXT Configure Terraform VPC modules :cloud:`
+    );
+  }
+
+  private getStorageKey(filename: string, userId = 'default'): { memKey: string; localKey: string } {
+    if (filename.startsWith('projects/')) {
+      const sanitized = filename.replace(/\//g, '_');
+      return {
+        memKey: `proj:${filename}`,
+        localKey: `org_proj_${sanitized}`
+      };
+    }
+    return {
+      memKey: `user:${userId}:${filename}`,
+      localKey: `org_user_${userId}_${filename}`
+    };
   }
 
   public saveSetting(key: string, value: string): void {
@@ -61,33 +81,70 @@ export class StorageService {
     return null;
   }
 
-  public async saveOrgFile(filename: string, content: string): Promise<void> {
-    this.inMemoryFiles.set(filename, content);
+  public async saveOrgFile(filename: string, content: string, userId = 'default'): Promise<void> {
+    const { memKey, localKey } = this.getStorageKey(filename, userId);
+    this.inMemoryFiles.set(memKey, content);
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(`org_file_${filename}`, content);
+      localStorage.setItem(localKey, content);
     }
   }
 
-  public async loadOrgFile(filename: string): Promise<string | null> {
-    if (this.inMemoryFiles.has(filename)) {
-      return this.inMemoryFiles.get(filename)!;
+  public async loadOrgFile(filename: string, userId = 'default'): Promise<string | null> {
+    const { memKey, localKey } = this.getStorageKey(filename, userId);
+
+    if (this.inMemoryFiles.has(memKey)) {
+      return this.inMemoryFiles.get(memKey)!;
     }
+
     if (typeof localStorage !== 'undefined') {
-      return localStorage.getItem(`org_file_${filename}`);
+      const saved = localStorage.getItem(localKey);
+      if (saved !== null) {
+        this.inMemoryFiles.set(memKey, saved);
+        return saved;
+      }
     }
-    return null;
+
+    // Default template fallbacks for personal files
+    if (filename === 'todo.org') {
+      return this.inMemoryFiles.get('user:default:todo.org') || null;
+    }
+    if (filename === 'habits.org') {
+      return this.inMemoryFiles.get('user:default:habits.org') || null;
+    }
+    if (filename.startsWith('projects/')) {
+      return this.inMemoryFiles.get('proj:projects/phoenix.org') || `#+TITLE: ${filename}\n\n`;
+    }
+
+    return `#+TITLE: ${filename}\n\n`;
   }
 
-  public async listOrgFiles(): Promise<string[]> {
-    const files = new Set<string>(this.inMemoryFiles.keys());
+  public async listOrgFiles(userId = 'default'): Promise<string[]> {
+    const userPrefix = `user:${userId}:`;
+    const files = new Set<string>();
+
+    for (const key of this.inMemoryFiles.keys()) {
+      if (key.startsWith(userPrefix)) {
+        files.add(key.replace(userPrefix, ''));
+      } else if (key.startsWith('proj:')) {
+        files.add(key.replace('proj:', ''));
+      }
+    }
+
     if (typeof localStorage !== 'undefined') {
+      const localUserPrefix = `org_user_${userId}_`;
       for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('org_file_')) {
-          files.add(key.replace('org_file_', ''));
+        const k = localStorage.key(i);
+        if (k && k.startsWith(localUserPrefix)) {
+          files.add(k.replace(localUserPrefix, ''));
+        } else if (k && k.startsWith('org_proj_')) {
+          files.add(k.replace('org_proj_', '').replace(/_/g, '/'));
         }
       }
     }
+
+    // Always ensure canonical personal files are available
+    ['refile.org', 'todo.org', 'habits.org', 'projects.org', 'archive.org'].forEach(f => files.add(f));
+
     return Array.from(files);
   }
 

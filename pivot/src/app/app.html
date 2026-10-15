@@ -30,14 +30,14 @@
       <!-- Navigation Tabs -->
       <nav class="flex items-center bg-slate-100 dark:bg-slate-800/90 p-1 rounded-xl border border-slate-200/70 dark:border-slate-700/70 text-xs font-semibold overflow-x-auto">
         <button
-          (click)="activeTab.set('daily')"
+          (click)="selectTab('daily')"
           [class.bg-indigo-600]="activeTab() === 'daily'"
           [class.text-white]="activeTab() === 'daily'"
           class="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition">
           Daily Streaks
         </button>
         <button
-          (click)="activeTab.set('intervals')"
+          (click)="selectTab('intervals')"
           [class.bg-indigo-600]="activeTab() === 'intervals'"
           [class.text-white]="activeTab() === 'intervals'"
           class="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition flex items-center gap-1.5">
@@ -45,29 +45,35 @@
           <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
         </button>
         <button
-          (click)="activeTab.set('agenda')"
+          (click)="selectTab('agenda')"
           [class.bg-indigo-600]="activeTab() === 'agenda'"
           [class.text-white]="activeTab() === 'agenda'"
           class="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition flex items-center gap-1">
           <span>Norang Agenda</span>
         </button>
         <button
-          (click)="activeTab.set('org')"
+          (click)="selectTab('org')"
           [class.bg-indigo-600]="activeTab() === 'org'"
           [class.text-white]="activeTab() === 'org'"
           class="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition">
           Org & Babel
         </button>
         <button
-          (click)="activeTab.set('collab')"
+          (click)="selectTab('collab')"
           [class.bg-indigo-600]="activeTab() === 'collab'"
           [class.text-white]="activeTab() === 'collab'"
           class="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition flex items-center gap-1">
           <span>Projects & MFA</span>
-          @if (authService.phoneMfaRequired()) {
-            <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-          }
         </button>
+        @if (authService.phoneMfaRequired()) {
+          <button
+            (click)="selectTab('link-phone')"
+            [class.bg-amber-600]="activeTab() === 'link-phone'"
+            [class.text-white]="activeTab() === 'link-phone'"
+            class="px-3 py-1.5 rounded-lg text-amber-500 font-bold transition flex items-center gap-1.5 animate-pulse">
+            <span>⚠️ Link Phone MFA</span>
+          </button>
+        }
       </nav>
 
       <!-- Action Controls -->
@@ -498,11 +504,18 @@
                 [ngModel]="selectedOrgFile()"
                 (ngModelChange)="selectedOrgFile.set($event); loadSelectedOrgFile()"
                 class="bg-slate-100 dark:bg-slate-800 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
-                <option value="todo.org">todo.org</option>
-                <option value="habits.org">habits.org</option>
-                <option value="refile.org">refile.org</option>
-                <option value="projects.org">projects.org</option>
-                <option value="archive.org">archive.org</option>
+                <optgroup label="Personal Files (Private to You)">
+                  @for (f of accessibleFiles().personal; track f) {
+                    <option [value]="f">📁 {{ f }}</option>
+                  }
+                </optgroup>
+                @if (accessibleFiles().projects.length > 0) {
+                  <optgroup label="Collaborative Project Files (Shared)">
+                    @for (f of accessibleFiles().projects; track f) {
+                      <option [value]="f">👥 {{ f }}</option>
+                    }
+                  </optgroup>
+                }
               </select>
             </div>
             <div class="flex items-center gap-2">
@@ -574,14 +587,15 @@
     }
 
     <!-- TAB 5: PROJECTS & FIREBASE PHONE MFA VIEW -->
+    <!-- TAB 5: PROJECTS & FIREBASE PHONE MFA VIEW -->
     @if (activeTab() === 'collab') {
       <section class="space-y-6">
-        <!-- Authentication & Mandatory Phone MFA Status Card -->
+        <!-- Multi-User Session Switcher & Authentication Card -->
         <div class="bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm space-y-4">
-          <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div class="flex flex-wrap items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 gap-2">
             <div>
-              <h3 class="font-bold text-base">Firebase Authentication & Multi-Factor Security</h3>
-              <p class="text-xs text-slate-500">All users require verified Phone Authentication as MFA</p>
+              <h3 class="font-bold text-base">Multi-User Session & Firebase Authentication</h3>
+              <p class="text-xs text-slate-500">Private personal files are strictly segregated per user UID</p>
             </div>
             @if (authService.currentUser(); as user) {
               <div class="flex items-center gap-2">
@@ -614,51 +628,36 @@
             }
           </div>
 
-          <!-- Phone MFA Registration / Account Linking Flow -->
-          @if (authService.currentUser(); as user) {
-            @if (!user.phoneMfaLinked) {
-              <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-3">
-                <h4 class="font-bold text-xs text-amber-400">Account Linking Registration: Verify Phone MFA</h4>
-                <p class="text-xs text-slate-300">
-                  Your account ({{ user.email || user.displayName }}) requires SMS verification before full access to private and collaborative Org trees is granted.
-                </p>
-                <div class="flex flex-wrap items-center gap-2">
-                  <input
-                    type="text"
-                    [(ngModel)]="phoneInput"
-                    placeholder="+15551234567"
-                    class="bg-slate-900 px-3 py-1.5 rounded-lg text-xs font-mono text-white border border-slate-700 focus:outline-none">
-                  <button
-                    (click)="sendPhoneVerification()"
-                    class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">
-                    Send SMS Code
-                  </button>
-                </div>
-                @if (phoneConfirmationId()) {
-                  <div class="flex items-center gap-2 pt-2">
-                    <input
-                      type="text"
-                      [(ngModel)]="smsCodeInput"
-                      placeholder="Enter 6-digit code (123456)"
-                      class="bg-slate-900 px-3 py-1.5 rounded-lg text-xs font-mono text-white border border-slate-700 focus:outline-none">
-                    <button
-                      (click)="confirmLinkPhoneMfa()"
-                      class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold">
-                      Verify & Link Phone MFA
-                    </button>
-                  </div>
-                }
-              </div>
-            }
-          }
+          <!-- Multi-User Account Switcher for Testing -->
+          <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+              Simulate Multi-User Private Storage (Switch Active User):
+            </span>
+            <div class="flex flex-wrap gap-2">
+              @for (u of authService.getRegisteredUsers(); track u.uid) {
+                <button
+                  (click)="switchActiveUser(u.uid)"
+                  [class.ring-2]="authService.currentUser()?.uid === u.uid"
+                  [class.ring-indigo-500]="authService.currentUser()?.uid === u.uid"
+                  class="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center gap-1.5 shadow-sm hover:border-indigo-400 transition">
+                  <span>{{ u.displayName }}</span>
+                  @if (u.phoneMfaLinked) {
+                    <span class="text-emerald-500 text-[10px]">✓ MFA</span>
+                  } @else {
+                    <span class="text-amber-500 text-[10px]">⚠️ No MFA</span>
+                  }
+                </button>
+              }
+            </div>
+          </div>
         </div>
 
-        <!-- Multi-User Project Segregation Card -->
+        <!-- Collaborative Org Projects Card -->
         <div class="bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm space-y-4">
           <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <div>
               <h3 class="font-bold text-base">Collaborative Org Projects</h3>
-              <p class="text-xs text-slate-500">Segregated Org subtrees shared with specific Google users</p>
+              <p class="text-xs text-slate-500">Segregated Org subtrees shared with specific Google / Email users</p>
             </div>
             <div class="flex items-center gap-2">
               <input
@@ -671,6 +670,36 @@
                 class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold">
                 + Create Project
               </button>
+            </div>
+          </div>
+
+          <!-- Registered Users Directory: Eligible vs Ineligible for Collaboration -->
+          <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-3">
+            <h4 class="font-bold text-xs text-slate-300">
+              Registered Users Directory (Requirement: Firebase Phone MFA required for project access)
+            </h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+              @for (regUser of authService.getRegisteredUsers(); track regUser.uid) {
+                <div class="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between text-xs">
+                  <div>
+                    <span class="font-bold">{{ regUser.displayName }}</span>
+                    <span class="text-[11px] text-slate-400 block">{{ regUser.email }} ({{ regUser.providerId }})</span>
+                  </div>
+                  <div>
+                    @if (regUser.phoneMfaLinked) {
+                      <button
+                        (click)="addEligibleUser(regUser.displayName || regUser.email || '')"
+                        class="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition">
+                        + Add to Project
+                      </button>
+                    } @else {
+                      <span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold">
+                        MFA Incomplete
+                      </span>
+                    }
+                  </div>
+                </div>
+              }
             </div>
           </div>
 
@@ -712,12 +741,7 @@
                   <input
                     type="text"
                     [(ngModel)]="addMemberName"
-                    placeholder="Add user by name..."
-                    class="bg-white dark:bg-slate-900 px-3 py-1 rounded text-xs border border-slate-300 dark:border-slate-600 focus:outline-none">
-                  <input
-                    type="email"
-                    [(ngModel)]="addMemberEmail"
-                    placeholder="User email..."
+                    placeholder="Add registered user by name..."
                     class="bg-white dark:bg-slate-900 px-3 py-1 rounded text-xs border border-slate-300 dark:border-slate-600 focus:outline-none">
                   <button
                     (click)="addMember()"
@@ -731,6 +755,90 @@
         </div>
       </section>
     }
+
+    <!-- TAB 6: DEDICATED ACCOUNT LINKING REGISTRATION (MANDATORY PHONE MFA) -->
+    @if (activeTab() === 'link-phone') {
+      <section class="max-w-2xl mx-auto space-y-6">
+        <div class="bg-white dark:bg-slate-900 border border-amber-500/40 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
+          <div class="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+            <div class="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-500 flex items-center justify-center text-2xl font-black">
+              🛡️
+            </div>
+            <div>
+              <h2 class="text-xl font-bold tracking-tight text-amber-500 dark:text-amber-400">
+                Account Linking Registration: Mandatory Phone MFA
+              </h2>
+              <p class="text-xs text-slate-500 dark:text-slate-400">
+                Firebase Authentication security enforcement for personal & collaborative Org files
+              </p>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 space-y-1.5">
+            <div class="font-bold">⚠️ Access to Org Dashboard is Restricted</div>
+            <p>
+              You are currently signed in as
+              <span class="font-semibold">{{ authService.currentUser()?.displayName || authService.currentUser()?.email || 'Registered User' }}</span>
+              via {{ authService.currentUser()?.providerId | uppercase }} authentication.
+            </p>
+            <p>
+              In accordance with project security policies, all Google and Email registered accounts require a linked and verified
+              <strong>Firebase Phone Authentication</strong> MFA before access to private Org mode files or shared projects is permitted.
+            </p>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                Step 1: Phone Number (E.164 format)
+              </label>
+              <div class="flex gap-2">
+                <input
+                  type="tel"
+                  [(ngModel)]="phoneInput"
+                  placeholder="+15551234567"
+                  class="flex-1 bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 px-4 py-2.5 rounded-xl text-sm font-mono focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                <button
+                  (click)="sendPhoneVerification()"
+                  class="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-bold text-xs shadow-lg shadow-amber-600/20 transition">
+                  Send SMS Code
+                </button>
+              </div>
+            </div>
+
+            @if (phoneConfirmationId()) {
+              <div class="pt-2 space-y-2">
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  Step 2: Enter 6-Digit SMS Verification Code
+                </label>
+                <div class="flex gap-2">
+                  <input
+                    type="text"
+                    [(ngModel)]="smsCodeInput"
+                    placeholder="123456"
+                    maxlength="6"
+                    class="w-40 bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 px-4 py-2.5 rounded-xl text-sm font-mono text-center tracking-widest font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                  <button
+                    (click)="confirmLinkPhoneMfa()"
+                    class="flex-1 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition">
+                    Verify & Link Phone MFA (Unlock Full Org Access)
+                  </button>
+                </div>
+                <p class="text-[11px] text-slate-400">
+                  Tip: For testing, use the simulated OTP code <code class="font-bold text-emerald-400">123456</code>.
+                </p>
+              </div>
+            }
+
+            @if (authMessage()) {
+              <div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400">
+                {{ authMessage() }}
+              </div>
+            }
+          </div>
+        </div>
+      </section>
+    }
   </main>
 
   <!-- QUICK CAPTURE MODAL (Alt+Shift+C) -->
@@ -738,8 +846,11 @@
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-pop">
       <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-2xl max-w-lg w-full space-y-4">
         <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-          <h3 class="font-bold text-base">Quick Org Capture</h3>
-          <button (click)="captureModalOpen.set(false)" class="text-slate-400 hover:text-white font-bold">✕</button>
+          <div>
+            <h3 class="font-bold text-base">Quick Org Capture</h3>
+            <p class="text-[11px] text-slate-400">Press hotkey (t, h, n, p, m) or click a template</p>
+          </div>
+          <button (click)="closeAllModals()" class="text-slate-400 hover:text-white font-bold">✕</button>
         </div>
 
         <!-- Mnemonic template selector -->
@@ -803,8 +914,11 @@
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-pop">
       <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full space-y-4">
         <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-          <h3 class="font-bold text-base">Select Norang TODO State</h3>
-          <button (click)="todoStateModalOpen.set(false)" class="text-slate-400 hover:text-white font-bold">✕</button>
+          <div>
+            <h3 class="font-bold text-base">Select Norang TODO State</h3>
+            <p class="text-[11px] text-slate-400">Press hotkey (t, n, s, w, h, d, c) or click below</p>
+          </div>
+          <button (click)="closeAllModals()" class="text-slate-400 hover:text-white font-bold">✕</button>
         </div>
         <div class="space-y-2">
           <button (click)="selectFastTodoState('TODO')" class="w-full text-left p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-mono font-bold flex items-center justify-between">

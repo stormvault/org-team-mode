@@ -16,6 +16,7 @@ export class KeyboardShortcutsService {
   public readonly actionStream = this.actionSubject.asObservable();
 
   public readonly cheatSheetVisible = signal<boolean>(false);
+  public readonly activeModal = signal<'none' | 'todo_state' | 'capture' | 'refile'>('none');
 
   public readonly registeredShortcuts: ShortcutDefinition[] = [
     { keys: 'Alt + Shift + C', description: 'Quick Org Capture Drawer', action: 'capture', category: 'Org Capture' },
@@ -38,6 +39,10 @@ export class KeyboardShortcutsService {
     }
   }
 
+  public setActiveModal(modal: 'none' | 'todo_state' | 'capture' | 'refile'): void {
+    this.activeModal.set(modal);
+  }
+
   public handleKeyDown(event: KeyboardEvent): void {
     const target = event.target as HTMLElement;
     const isInput = target && (
@@ -51,6 +56,7 @@ export class KeyboardShortcutsService {
       if (this.cheatSheetVisible()) {
         this.cheatSheetVisible.set(false);
       }
+      this.activeModal.set('none');
       this.actionSubject.next('escape');
       return;
     }
@@ -112,6 +118,33 @@ export class KeyboardShortcutsService {
 
     // If typing in input, ignore single key navigation
     if (isInput) return;
+
+    // Norang Fast Single-Key Modal Shortcuts when dialog is open and not typing in text field
+    const currentModal = this.activeModal();
+    if (currentModal === 'todo_state') {
+      const k = event.key.toLowerCase();
+      const stateMap: Record<string, string> = {
+        t: 'TODO',
+        n: 'NEXT',
+        s: 'STARTED',
+        w: 'WAITING',
+        h: 'HOLD',
+        d: 'DONE',
+        c: 'CANCELLED'
+      };
+      if (stateMap[k]) {
+        event.preventDefault();
+        this.actionSubject.next(`fast_state:${stateMap[k]}`);
+        return;
+      }
+    } else if (currentModal === 'capture') {
+      const k = event.key.toLowerCase();
+      if (['t', 'h', 'n', 'p', 'm'].includes(k)) {
+        event.preventDefault();
+        this.actionSubject.next(`capture_tpl:${k}`);
+        return;
+      }
+    }
   }
 
   public toggleCheatSheet(): void {

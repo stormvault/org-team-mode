@@ -25,6 +25,10 @@ describe('ProjectCollaborationService (Segregated Org Projects & User Sharing)',
     const project = collabService.createProject('Phoenix Infrastructure');
     expect(project.orgFiles.length).toBeGreaterThan(0);
     expect(project.orgFiles[0]).toContain('projects/phoenix');
+
+    const accessible = collabService.getAccessibleFiles(authService.currentUser()?.uid);
+    expect(accessible.personal).toEqual(personal);
+    expect(accessible.projects.some(f => f.includes('phoenix'))).toBe(true);
   });
 
   it('should invite collaborator by email address', async () => {
@@ -36,12 +40,29 @@ describe('ProjectCollaborationService (Segregated Org Projects & User Sharing)',
     expect(updated?.members.some(m => m.email === 'colleague@google.com')).toBe(true);
   });
 
-  it('should add existing registered user one-at-a-time by name', () => {
+  it('should add existing registered user one-at-a-time by name when Phone MFA is verified', () => {
     const project = collabService.createProject('Beta System');
-    const success = collabService.addMemberByName(project.id, 'Bob Vance', 'bob@example.com');
-    expect(success).toBe(true);
+    // Bob Vance is registered in FirebaseAuthService with phoneMfaLinked: true
+    const result = collabService.addMemberByName(project.id, 'Bob Vance');
+    expect(result.success).toBe(true);
+    expect(result.member?.name).toBe('Bob Vance');
 
     const updated = collabService.getProject(project.id);
     expect(updated?.members.some(m => m.name === 'Bob Vance')).toBe(true);
+  });
+
+  it('should reject adding users who are not registered with Firebase', () => {
+    const project = collabService.createProject('Gamma System');
+    const result = collabService.addMemberByName(project.id, 'Unregistered Person');
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('is not registered');
+  });
+
+  it('should reject adding registered users whose Firebase Phone MFA is incomplete', () => {
+    const project = collabService.createProject('Delta System');
+    // Charlie Unverified is registered with Google but phoneMfaLinked is false
+    const result = collabService.addMemberByName(project.id, 'Charlie Unverified');
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('has not completed Firebase Phone Authentication MFA');
   });
 });

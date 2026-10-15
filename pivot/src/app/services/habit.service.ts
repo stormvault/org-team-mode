@@ -395,6 +395,11 @@ export class HabitService {
     const task = this.orgEngine.getTask(orgTaskId);
     if (task) {
       this.orgEngine.addManualClock(orgTaskId, type === 'interval' ? 5 : 15, `Completed habit: ${type}`);
+      const habit = this.habitsSignal().find(h => h.id === habitId);
+      const repeater = type === 'interval'
+        ? `${Math.max(1, Math.round((habit?.intervalSeconds || 1200) / 60))}m`
+        : '1d';
+      this.orgEngine.advanceHabitSchedule(orgTaskId, repeater);
     }
   }
 }

@@ -22,6 +22,30 @@ describe('StorageService (IndexedDB & LocalStorage)', () => {
     expect(files).toContain('tasks.org');
   });
 
+  it('should maintain strict per-user file isolation for personal Org files', async () => {
+    // User Alice writes her private todo.org
+    await service.saveOrgFile('todo.org', '* TODO Alice personal task', 'user-alice');
+    // User Bob writes his private todo.org
+    await service.saveOrgFile('todo.org', '* TODO Bob separate task', 'user-bob');
+
+    const aliceContent = await service.loadOrgFile('todo.org', 'user-alice');
+    const bobContent = await service.loadOrgFile('todo.org', 'user-bob');
+
+    expect(aliceContent).toBe('* TODO Alice personal task');
+    expect(bobContent).toBe('* TODO Bob separate task');
+  });
+
+  it('should store shared collaborative project files across users', async () => {
+    await service.saveOrgFile(
+      'projects/phoenix.org',
+      '* TODO Shared team architecture task',
+      'user-alice'
+    );
+
+    const loadedByBob = await service.loadOrgFile('projects/phoenix.org', 'user-bob');
+    expect(loadedByBob).toBe('* TODO Shared team architecture task');
+  });
+
   it('should create and retrieve revision snapshots', async () => {
     const revId = await service.createRevisionSnapshot('Initial snapshot', {
       'todo.org': '* TODO Initial task'

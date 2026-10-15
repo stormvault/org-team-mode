@@ -154,45 +154,52 @@ The core security requirement states:
 
 #### Architecture & Enforcement Flow:
 ```
-[User Sign-In (Google or Email/Password)]
+[User Sign-In / Register (Google or Email/Password)]
                  │
                  ▼
       [Auth Service / Guard]
                  │
       Is Phone MFA Linked? (user.phoneMfaLinked)
-           ├── YES ──► Allow Access to Org Files & Shared Projects
-           └── NO  ──► Redirect immediately to /link-phone
+           ├── YES ──► Allow Access to Dashboard, Org Files & Shared Projects
+           └── NO  ──► PREVENT access & REDIRECT immediately to /link-phone
                              │
                              ▼
-              [Phone MFA Linking Registration]
-              - Enter Phone Number (E.164)
-              - Recaptcha Verification
-              - SMS Verification Code (OTP)
-              - linkWithPhoneNumber / linkWithCredential
+              [Dedicated Account Linking Registration View]
+              - Displays current Google / Email session identity
+              - Step 1: Enter Phone Number (E.164) -> sendPhoneVerificationCode()
+              - Step 2: Recaptcha & SMS Verification Code (OTP: 123456)
+              - Step 3: linkPhoneMfa() links Phone Authentication to active account
                              │
                              ▼
               Account Linked & Verified!
-              phoneMfaLinked = true
+              phoneMfaLinked = true, registeredUsers directory updated
                              │
                              ▼
-              Redirect to Main Org Dashboard
+              Redirect to Main Org Dashboard (/dashboard)
 ```
 
-#### Angular Guard Implementation:
-- `mfaGuard`: Inspects the active user state.
-  - If user is not authenticated: redirect to `/login`.
-  - If user is authenticated BUT `!user.phoneMfaLinked`: redirect to `/link-phone`.
-  - If user is authenticated AND `user.phoneMfaLinked`: allow navigation.
+#### Angular Guard & Router Implementation:
+- `mfaGuard`: Protects private and collaborative routes (`/dashboard`).
+  - If user is not authenticated: redirects to `/login`.
+  - If user is authenticated BUT `!user.phoneMfaLinked`: redirects to `/link-phone` (Account Linking Registration).
+  - If user is authenticated AND `user.phoneMfaLinked`: allows navigation.
+- In-Component Reactive Gating:
+  - `selectTab()` intercepts clicks to `'daily'`, `'intervals'`, `'agenda'`, or `'org'` if `phoneMfaRequired()` is true, immediately redirecting to `'link-phone'` and displaying an explicit security denial toast.
 
 ### 5.3 Multi-User Project Segregation & Collaboration
-- **Personal vs. Shared Isolation**:
-  - Each authenticated user has a private repository of org-mode files (`refile.org`, `personal.org`, `habits.org`) identified by `uid`.
-  - Project files (`projects/<project-id>.org`) are stored with access control metadata:
-    - `ownerUid`: The creator.
-    - `collaborators`: Array of `{ uid, email, displayName, role }`.
-- **Collaboration Functions**:
-  1. **Invite by Email**: Sends a project invitation to a Google user by email address.
-  2. **Add by Name (One at a time)**: Adds an already registered user to a specific project by name/email, granting immediate read/write access to that specific project's Org tree while keeping personal files strictly isolated.
+- **Registered Users Directory**:
+  - `FirebaseAuthService` maintains an active directory of registered users across Google and Email auth providers (`Alice Engineer`, `Bob Vance`, `Charlie Unverified`, `David Password`).
+  - Tracks individual Phone MFA completion status.
+- **Strict Collaborator Addition Rules**:
+  - **Invite by Email**: Sends a project invitation to any Google or external email address.
+  - **Add by Name (One at a time)**: Allows selecting or typing an existing user by name. The service verifies:
+    1. The user must already be registered in Firebase via Google or Email Authentication.
+    2. The user must have completed Firebase Phone Authentication MFA (`phoneMfaLinked: true`).
+    If either check fails, the operation is blocked with a descriptive error (`"User has not completed Firebase Phone Authentication MFA"` or `"User is not registered"`).
+- **Multi-User Personal File Isolation**:
+  - `StorageService` scopes personal Org files (`todo.org`, `habits.org`, `refile.org`, `notes.org`, `archive.org`) by user UID (`org_user_${uid}_${filename}`).
+  - Switching between users completely segregates private files.
+  - Collaborative project files (`projects/<project-id>.org`) are stored in project scope and dynamically grouped in the Org file editor under `Collaborative Project Files (Shared)`.
 
 ---
 
@@ -202,7 +209,8 @@ The attached HabitFlow Pro dashboard is modularized into Angular 22 components:
 1. **Habit Engine Service (`HabitService`)**:
    - Manages daily habits and sub-daily intervals.
    - Computes current streaks, best streaks, and today's check-in metrics.
-   - Integrates with Org-Mode's `:STYLE: habit` property and SCHEDULED repeaters.
+   - Integrates with Org-Mode's `:STYLE: habit` property and SCHEDULED repeaters (`.+1d`, `.+40m`).
+   - Checking in a habit advances the Org scheduled date and records a state transition cycle (`TODO` -> `TODO` with next date).
 2. **Precision Timer Engine (`TimerService`)**:
    - Interval countdown running with second-level precision.
    - Tone.js / Web Audio chime notifications when timers lapse.
@@ -215,10 +223,13 @@ The attached HabitFlow Pro dashboard is modularized into Angular 22 components:
 
 ## 7. Verification & Testing Strategy
 
-- **Unit Testing**: Vitest test runner executing spec files for:
-  - Norang task state machine transitions and invalid state rejections.
-  - Fast TODO selection shortcuts.
-  - Time clocking duration calculations and overtime detection.
-  - Habit streak computation algorithms (daily streaks and interval check-in streak).
-  - Firebase Phone MFA guard redirection logic.
-- **Production Compilation**: Clean `ng build` producing optimized production bundles in `pivot/dist/pivot`.
+- **Unit Testing**: Vitest test runner executing 52 automated tests across 8 test suites:
+  - Norang task state machine transitions, fast selection, and transition logging (`org-engine.service.spec.ts`).
+  - Habit check-in with scheduled repeater advancement and streak algorithms (`habit.service.spec.ts`).
+  - Collision-free Alt+Shift chords and modal single-key fast TODO states (`keyboard-shortcuts.service.spec.ts`).
+  - Multi-user private storage isolation and collaborative project file persistence (`storage.service.spec.ts`).
+  - Firebase Authentication, Phone MFA linking, and eligible collaborator filtering (`firebase-auth.service.spec.ts`).
+  - Project collaboration, email invites, and name-based adding with Phone MFA enforcement (`project-collaboration.service.spec.ts`).
+  - Route guard redirection logic for incomplete MFA (`mfa.guard.spec.ts`).
+  - Full end-to-end component lifecycle, MFA blocking, and UI tab navigation (`app.spec.ts`).
+- **Production Compilation**: Clean `ng build` producing optimized production bundles with code splitting in `pivot/dist/pivot`.

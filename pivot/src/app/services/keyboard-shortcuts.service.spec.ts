@@ -71,4 +71,27 @@ describe('KeyboardShortcutsService', () => {
 
     expect(actions).toEqual(['clock_in', 'clock_out']);
   });
+
+  it('should trigger fast single-key TODO state selection when todo_state modal is active', () => {
+    service.setActiveModal('todo_state');
+    const actions: string[] = [];
+    service.actionStream.subscribe(action => actions.push(action));
+
+    service.handleKeyDown(new KeyboardEvent('keydown', { key: 'd' })); // DONE
+    service.handleKeyDown(new KeyboardEvent('keydown', { key: 'n' })); // NEXT
+    service.handleKeyDown(new KeyboardEvent('keydown', { key: 's' })); // STARTED
+
+    expect(actions).toEqual(['fast_state:DONE', 'fast_state:NEXT', 'fast_state:STARTED']);
+  });
+
+  it('should trigger template selection hotkey when capture modal is active', () => {
+    service.setActiveModal('capture');
+    let triggeredAction: string | null = null;
+    service.actionStream.subscribe(action => {
+      triggeredAction = action;
+    });
+
+    service.handleKeyDown(new KeyboardEvent('keydown', { key: 'm' })); // meeting template
+    expect(triggeredAction).toBe('capture_tpl:m');
+  });
 });

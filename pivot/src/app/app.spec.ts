@@ -23,16 +23,16 @@ describe('App Component (HabitFlow Org & Norang GTD Dashboard)', () => {
     const app = fixture.componentInstance;
     expect(app.activeTab()).toBe('daily');
 
-    app.activeTab.set('intervals');
+    app.selectTab('intervals');
     expect(app.activeTab()).toBe('intervals');
 
-    app.activeTab.set('agenda');
+    app.selectTab('agenda');
     expect(app.activeTab()).toBe('agenda');
 
-    app.activeTab.set('org');
+    app.selectTab('org');
     expect(app.activeTab()).toBe('org');
 
-    app.activeTab.set('collab');
+    app.selectTab('collab');
     expect(app.activeTab()).toBe('collab');
   });
 
@@ -90,7 +90,7 @@ describe('App Component (HabitFlow Org & Norang GTD Dashboard)', () => {
     expect(app.darkMode()).toBe(!initial);
   });
 
-  it('should log interval habit from banner', () => {
+  it('should log interval habit from banner and advance repeater in Org mode', () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
 
@@ -101,6 +101,9 @@ describe('App Component (HabitFlow Org & Norang GTD Dashboard)', () => {
       const initialCount = app.habitService.getTodayIntervalCount(intervalHabit.id);
       app.logActiveIntervalHabit();
       expect(app.habitService.getTodayIntervalCount(intervalHabit.id)).toBe(initialCount + 1);
+
+      const orgTask = app.orgEngine.getTask(`org-${intervalHabit.id}`);
+      expect(orgTask?.scheduled).toBeDefined();
     }
   });
 
@@ -116,13 +119,22 @@ describe('App Component (HabitFlow Org & Norang GTD Dashboard)', () => {
     expect(app.babelOutput).toContain('Babel output test');
   });
 
-  it('should execute phone MFA linking flow', async () => {
+  it('should enforce Phone MFA redirection and block protected tabs when MFA is incomplete', async () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
 
+    // Sign in with Google (phone MFA not linked yet)
     await app.loginWithGoogle();
     expect(app.authService.phoneMfaRequired()).toBe(true);
+    // User must be redirected immediately to account linking registration view
+    expect(app.activeTab()).toBe('link-phone');
 
+    // Attempting to access daily habits or agenda is blocked
+    app.selectTab('daily');
+    expect(app.activeTab()).toBe('link-phone');
+    expect(app.toast()?.message).toContain('Access Denied');
+
+    // Complete phone MFA linking
     app.phoneInput = '+15554443322';
     await app.sendPhoneVerification();
     expect(app.phoneConfirmationId()).not.toBeNull();
@@ -130,9 +142,12 @@ describe('App Component (HabitFlow Org & Norang GTD Dashboard)', () => {
     app.smsCodeInput = '123456';
     await app.confirmLinkPhoneMfa();
     expect(app.authService.isPhoneMfaComplete()).toBe(true);
+
+    // Full Org access unlocked
+    expect(app.activeTab()).toBe('daily');
   });
 
-  it('should create collaborative projects and invite members', async () => {
+  it('should create collaborative projects, invite members, and add registered users by name with Phone MFA requirement', async () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
 
@@ -145,12 +160,22 @@ describe('App Component (HabitFlow Org & Norang GTD Dashboard)', () => {
     app.inviteEmail = 'partner@google.com';
     await app.sendInvite();
 
+    // Adding registered user with verified Phone MFA (Alice Engineer) succeeds
     app.addMemberName = 'Alice Engineer';
-    app.addMemberEmail = 'alice@example.com';
     app.addMember();
 
     const updated = app.collabService.projects()[0];
     expect(updated.members.some(m => m.name === 'Alice Engineer')).toBe(true);
+
+    // Adding user with incomplete Phone MFA is rejected
+    app.addMemberName = 'Charlie Unverified';
+    app.addMember();
+    expect(app.authMessage()).toContain('has not completed Firebase Phone Authentication MFA');
+
+    // Adding unregistered user is rejected
+    app.addMemberName = 'Non Existent';
+    app.addMember();
+    expect(app.authMessage()).toContain('is not registered');
   });
 
   it('should trigger exports without throwing error', () => {
@@ -160,5 +185,15 @@ describe('App Component (HabitFlow Org & Norang GTD Dashboard)', () => {
     expect(() => app.downloadMarkdown()).not.toThrow();
     expect(() => app.downloadHtml()).not.toThrow();
     expect(() => app.downloadCsv()).not.toThrow();
+  });
+
+  it('should group accessible files into personal and collaborative project categories', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+
+    const files = app.accessibleFiles();
+    expect(files.personal).toContain('todo.org');
+    expect(files.personal).toContain('habits.org');
+    expect(files.projects.some(f => f.includes('projects/'))).toBe(true);
   });
 });

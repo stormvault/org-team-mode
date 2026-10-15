@@ -267,6 +267,39 @@ export class OrgEngineService {
     );
   }
 
+  public advanceHabitSchedule(taskId: string, repeater = '1d'): void {
+    const now = new Date();
+    let nextDate = new Date(now);
+    if (repeater.endsWith('d')) {
+      const days = parseInt(repeater, 10) || 1;
+      nextDate.setDate(now.getDate() + days);
+    } else if (repeater.endsWith('m')) {
+      const mins = parseInt(repeater, 10) || 30;
+      nextDate = new Date(now.getTime() + mins * 60000);
+    }
+
+    this.tasksSignal.update(tasks =>
+      tasks.map(t => {
+        if (t.id === taskId) {
+          return {
+            ...t,
+            scheduled: nextDate.toISOString(),
+            logs: [
+              ...t.logs,
+              {
+                timestamp: new Date().toISOString(),
+                fromState: t.state,
+                toState: 'TODO',
+                note: `Habit completion logged, advanced repeater .+${repeater}`
+              }
+            ]
+          };
+        }
+        return t;
+      })
+    );
+  }
+
   public parseEffortMinutes(effort?: string): number {
     if (!effort) return 0;
     const parts = effort.split(':').map(Number);
