@@ -235,31 +235,47 @@ Before marking any task complete, verify:
 
 ## Development Commands
 
-**AI AGENT INSTRUCTION: This section should be adapted to the project's specific
-language, framework, and build tools.**
-
 ### Setup
 
 ```bash
-# Example: Commands to set up the development environment (e.g., install dependencies, configure database)
-# e.g., for a Node.js project: npm install
-# e.g., for a Go project: go mod tidy
+# Frontend (HabitFlow Org PWA)
+cd pivot && npm install
+
+# Backend & Firejail Sandbox Engine
+uv sync
+.venv/bin/pip install -e firejail
+
+# Canonical Org-Mode Submodule (release_9.7.15)
+git submodule update --init --recursive
+git -C org-mode checkout release_9.7.15
 ```
 
 ### Daily Development
 
 ```bash
-# Example: Commands for common daily tasks (e.g., start dev server, run tests, lint, format)
-# e.g., for a Node.js project: npm run dev, npm test, npm run lint
-# e.g., for a Go project: go run main.go, go test ./..., go fmt ./...
+# Start Frontend Dev Server (Angular 22)
+cd pivot && npm start
+
+# Run Frontend Automated Unit Tests (Vitest)
+cd pivot && npm test -- --watch=false
+
+# Run Backend Unit & Integration Tests (Pytest)
+.venv/bin/pytest
+.venv/bin/pytest firejail/tests
 ```
 
-### Before Committing
+### Before Committing (Pre-Commit Quality Gate)
 
 ```bash
-# Example: Commands to run all pre-commit checks (e.g., format, lint, type check, run tests)
-# e.g., for a Node.js project: npm run check
-# e.g., for a Go project: make check (if a Makefile exists)
+# 1. Run full frontend test suite and production build
+cd pivot && npm test -- --watch=false && npx ng build
+
+# 2. Run all backend tests across gateway and Firejail sandboxing
+.venv/bin/pytest
+.venv/bin/pytest firejail/tests
+
+# 3. Verify canonical Org-Mode 9.7.15 submodule integrity
+git submodule status
 ```
 
 ## Testing Requirements

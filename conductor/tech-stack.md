@@ -1,11 +1,23 @@
 # Technology Stack
 
-## Core Language & Runtime
-- **Language**: Python 3.12+
-- **Package & Environment Management**: `uv` / `pyproject.toml`
-- **Typing**: Python static typing (`typing`, `mypy`)
+## 1. Frontend Architecture (HabitFlow Org PWA)
+- **Framework**: Angular 22+ (Standalone Components, Signals, Zoneless change detection)
+- **Language**: TypeScript 5+
+- **Styling**: Tailwind CSS, PostCSS, Glassmorphism backdrop filters
+- **Audio Synthesis**: Tone.js (Web Audio API for interval chimes and harmonic cues)
+- **Voice & Speech Interface**: Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition` & `SpeechSynthesis`)
+- **Offline & Storage**: Progressive Web App (PWA) Service Worker, Web App Manifest, IndexedDB (optimistic local-first), LocalStorage
+- **Authentication & Security**: Firebase Auth Web SDK (Google Sign-In, Email/Password, mandatory Phone MFA account linking)
+- **Testing**: Vitest (`@analogjs/vitest-angular`), jsdom, automated component and service test suites
 
-## Sandboxing & Host Isolation
+## 2. Backend & Gateway Subsystem (Emacs-Web)
+- **Language & Runtime**: Python 3.12+ (managed with `uv` and `pyproject.toml`)
+- **API Framework**: FastAPI, Starlette, Uvicorn, Pydantic v2
+- **Authentication**: Firebase Admin SDK (JWT validation, tenant UID extraction, Phone MFA claims)
+- **Agent Integration**: Google Antigravity SDK (`google-antigravity`), Model Context Protocol (MCP) Python SDK
+- **Testing**: `pytest`, `pytest-cov`, `pytest-asyncio`
+
+## 3. Sandboxing & Process Isolation Subsystem (Emacs-Jail)
 - **Sandbox Engine**: Firejail (`/usr/bin/firejail`)
 - **Isolation Profiles**:
   - `firejail/emacs-org.profile` (Production profile with Org-Mode support)
@@ -18,39 +30,28 @@
   - Network isolation (`--net=none`)
   - POSIX Resource Limits (`RLIMIT_CPU`, `RLIMIT_AS`, `RLIMIT_NPROC`, `RLIMIT_FSIZE`)
 
-## Repository Architecture
-- **Web Application / Gateway**: `src/emacs_web/` (`pyproject.toml` top-level package managed by `uv`)
-- **Sandboxed Execution Subsystem**: `firejail/` containing:
-  - Python engine: `firejail/emacs_jail/`
-  - Sandboxing profiles: `firejail/emacs-*.profile`
-  - Lisp runner scripts: `firejail/lisp/`
-  - Tenant archive storage: `firejail/data/users/`
-  - Subsystem test suite: `firejail/tests/`
-
-## Execution Engine
+## 4. Headless GNU Emacs & Canonical Org-Mode Submodule
 - **GNU Emacs**: Headless batch mode (`emacs -Q --batch`)
-- **Org-Mode Framework**:
+- **Org-Mode Framework**: Tracked Git submodule at `@org-mode/` strictly pinned to tag `release_9.7.15` conforming to `https://doc.norang.ca/org-mode.html#ChangeHistory`
+  - Automated compilation and runtime loading following Norang Getting Started instructions
   - Exporters: `ox-html`, `ox-md`, `ox-latex`, `ox-ascii`
-  - Babel Code Execution: `org-babel` (supporting Python, Emacs Lisp, Shell)
+  - Babel Code Execution: `org-babel` (Python, Emacs Lisp, Shell)
   - Literate Tangling: `org-babel-tangle`
   - Agenda: Org-Mode AST parsing into structured JSON
 - **Lisp Runner Scripts**:
   - `firejail/lisp/org-export-runner.el`
   - `firejail/lisp/org-babel-runner.el`
   - `firejail/lisp/org-agenda-runner.el`
+  - `firejail/lisp/setup-org-mode.el`
 
-## Agent & Client Protocols
-- **AI Agent SDK**: Google Antigravity SDK (`google-antigravity`)
-- **Tool Protocol**: Model Context Protocol (MCP) Python SDK
-- **Web API**: FastAPI, Uvicorn, Pydantic
-- **Authentication**: Firebase Authentication (Google Sign-In, Firebase JWT ID tokens)
+## 5. Storage & Archive Data Plane
+- **Object Storage**: Cloud Storage for Firebase (GCS)
+- **Storage Layout**: `gs://<bucket>/users/{uid}/configs/{version_hash}.zip`
+- **Caching & Immutability**: `Cache-Control: private, max-age=31536000, immutable`
+- **Data vs Control Plane**: Direct GCS streaming via Firebase Storage Client SDK or V4 Signed URLs; zero raw byte proxying through Cloud Run containers
+- **Metadata & Pointers**: Cloud Firestore for structured tenant state, active version pointers, and project collaboration membership
+- **Exploit Defenses**: Zip-Slip verification, re-entrant file locking (`ArchiveLock` via `fcntl`), atomic staging (`os.replace`)
 
-## Storage & Concurrency
-- **Packaging Model**: Single-file ZIP archive (`<uid>.zip`) per virtual tenant
-- **Concurrency Control**: Re-entrant file locking (`ArchiveLock` using `fcntl.flock`)
-- **Durability**: Atomic staging and replacement (`os.replace`)
-- **Exploit Mitigation**: Zip-Slip defense verifying path normalization within the target boundary
-
-## Testing & Quality Assurance
-- **Test Framework**: `pytest`, `pytest-cov`, `pytest-asyncio`
-- **Linting & Formatting**: `ruff`
+## 6. Hosting & Cloud Infrastructure
+- **Frontend PWA**: Firebase App Hosting (`pivot/apphosting.yaml` and `pivot/firebase.json`)
+- **Backend Services**: Cloud Run / GKE container deployment with keyless IAM (`roles/iam.serviceAccountTokenCreator`)
